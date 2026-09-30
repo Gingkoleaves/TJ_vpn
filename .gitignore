@@ -1,0 +1,8 @@
+/vendor/
+/downloads/
+/runtime/
+/target/
+/config.local.json
+*.log
+*.zip
+

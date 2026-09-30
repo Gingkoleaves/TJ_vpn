@@ -1,0 +1,10 @@
+{
+  "server": "https://vpn.tongji.cn",
+  "interfaceName": "TongjiVPN",
+  "routes": ["192.0.2.10/32"],
+  "hosts": ["software.tongji.edu.cn"],
+  "domainSuffixes": ["tongji.edu.cn", "tongji.cn"],
+  "clashProxyName": "Tongji-Native",
+  "clashPipe": "verge-mihomo",
+  "clashProxyPort": 7897
+}
