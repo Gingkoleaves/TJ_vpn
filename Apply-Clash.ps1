@@ -18,7 +18,9 @@ if ($Restore) {
     if (-not (Test-Path -LiteralPath $changePath)) { Write-Host 'No Clash change to restore.'; return }
     $change = Get-Content -LiteralPath $changePath -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $change.active) { Write-Host 'Clash already restored.'; return }
-    if ((Get-FileHash -LiteralPath $change.scriptPath).Hash -ne $change.installedScriptHash) {
+    $currentHash = (Get-FileHash -LiteralPath $change.scriptPath).Hash
+    $baseHash = (Get-FileHash -LiteralPath $change.baseScript).Hash
+    if ($currentHash -ne $change.installedScriptHash -and $currentHash -ne $baseHash) {
         throw 'Global script was edited after installation; refusing to overwrite it. Restore the backup manually.'
     }
     $kernel = Find-Mihomo $MihomoPath
@@ -71,7 +73,7 @@ $validationExit = $LASTEXITCODE
 $ErrorActionPreference = $oldPreference
 if ($validationExit -ne 0) { throw 'Mihomo rejected candidate. Live Clash remains unchanged.' }
 $newChange = [pscustomobject]@{
-    active=$false; scriptPath=$scriptPath; baseScript=$baseScript; restoreRuntime=$restoreRuntime
+    active=$true; scriptPath=$scriptPath; baseScript=$baseScript; restoreRuntime=$restoreRuntime
     installedScriptHash=(Get-FileHash -LiteralPath $generatedScript).Hash; appliedAt=(Get-Date).ToString('o')
     selections=if($change -and $change.active){$change.selections}else{Get-ClashSelections $config.clashPipe}
 }

@@ -6,7 +6,9 @@
 
 ## 快速开始
 
-使用 `dist/` 中的便携 ZIP，可不安装 Rust。解压到普通目录，先运行：
+使用 `dist/` 中的便携 ZIP，可不安装 Rust。安装好 7-Zip 后解压 ZIP，双击 **Start.cmd** 即可：首次启动会自动下载、校验和解包 OpenConnect，再进入登录。不要在 ZIP 内直接运行。
+
+也可以手动准备客户端：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1
@@ -14,7 +16,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1
 
 Setup 从官方项目下载固定版本 OpenConnect，校验 SHA256 后解包；需要已安装 7-Zip。没有把 VPN 安装器、驱动安装向导或 WSL 作为启动流程。Wintun 由客户端创建接口时加载，需要管理员权限。
 
-然后双击 **Start.cmd**。它请求管理员权限，在本机终端启动 VPN：
+**Start.cmd** 请求管理员权限，在本机终端启动 VPN：
 
 - `authgroup`：**留空，直接回车**。
 - `username`：同济统一身份认证账号。

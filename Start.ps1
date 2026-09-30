@@ -5,6 +5,12 @@ if (-not ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Pri
     Start-Process -FilePath powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + $file + '"')
     return
 }
-try { & "$PSScriptRoot\Connect.ps1" }
+try {
+    if (-not (Test-Path -LiteralPath "$PSScriptRoot\vendor\openconnect\openconnect.exe")) {
+        Write-Host 'First start: preparing the verified OpenConnect client...'
+        & "$PSScriptRoot\Setup.ps1"
+    }
+    & "$PSScriptRoot\Connect.ps1"
+}
 catch { Write-Host $_.Exception.Message -ForegroundColor Red }
 finally { Read-Host 'Press Enter to close this window' | Out-Null }

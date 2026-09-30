@@ -2,6 +2,7 @@ param([int]$Count = 1, [int]$IntervalSeconds = 10, [string]$ConfigPath = "$PSScr
 . "$PSScriptRoot\scripts\Common.ps1"
 if ($Count -lt 1 -or $Count -gt 10000 -or $IntervalSeconds -lt 0) { throw 'Invalid sampling options.' }
 $config = Read-CampusConfig $ConfigPath
+New-Item -ItemType Directory -Path "$PSScriptRoot\runtime" -Force | Out-Null
 $statePath = "$PSScriptRoot\runtime\state.json"
 $results = @()
 for ($sample = 1; $sample -le $Count; $sample++) {
