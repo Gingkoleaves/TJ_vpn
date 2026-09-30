@@ -2,7 +2,8 @@
 /downloads/
 /runtime/
 /target/
+/bin/
+/dist/
 /config.local.json
 *.log
 *.zip
-

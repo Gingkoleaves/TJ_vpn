@@ -27,7 +27,12 @@ if (-not (Test-Path -LiteralPath "$vendor\openconnect.exe")) {
     & $SevenZipPath x $installer "-o$vendor" -y | Out-Null
     if ($LASTEXITCODE -ne 0) { throw '7-Zip extraction failed.' }
 }
+$savedPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 $protocols = & "$vendor\openconnect.exe" --version 2>&1 | Out-String
+$versionExit = $LASTEXITCODE
+$ErrorActionPreference = $savedPreference
+if ($versionExit -ne 0) { throw 'OpenConnect version check failed.' }
 if ($protocols -notmatch 'Supported protocols:.*array') { throw 'Array support is missing.' }
 if (-not (Test-Path -LiteralPath "$vendor\wintun.dll")) { throw 'Wintun is missing.' }
 Write-Host "OpenConnect $version + Array + Wintun ready (portable)."

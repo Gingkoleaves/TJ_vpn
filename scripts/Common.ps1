@@ -43,7 +43,30 @@ function Assert-Administrator {
 }
 
 function Save-CampusState($State, [string]$Path) {
-    $State | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding UTF8
+    $temporary = "$Path.$PID.tmp"
+    [IO.File]::WriteAllText($temporary, ($State | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temporary, $Path, "$Path.previous") }
+    else { [IO.File]::Move($temporary, $Path) }
+}
+
+function ConvertTo-NativeArgument([string]$Value) {
+    $builder = [Text.StringBuilder]::new()
+    [void]$builder.Append('"')
+    $slashes = 0
+    foreach ($character in $Value.ToCharArray()) {
+        if ($character -eq '\') { $slashes++; continue }
+        if ($character -eq '"') {
+            [void]$builder.Append(('\' * (2 * $slashes + 1)))
+            [void]$builder.Append('"')
+        } else {
+            [void]$builder.Append(('\' * $slashes))
+            [void]$builder.Append($character)
+        }
+        $slashes = 0
+    }
+    [void]$builder.Append(('\' * (2 * $slashes)))
+    [void]$builder.Append('"')
+    return $builder.ToString()
 }
 
 function Remove-CampusState([string]$Path) {
