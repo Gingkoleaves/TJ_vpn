@@ -3,7 +3,8 @@ param(
     [string]$UserName,
     [string]$ClashDirectory = "$env:APPDATA\io.github.clash-verge-rev.clash-verge-rev",
     [string]$MihomoPath,
-    [switch]$NoClash
+    [switch]$NoClash,
+    [pscredential]$Credential
 )
 . "$PSScriptRoot\scripts\Clash.ps1"
 Assert-Administrator
@@ -38,12 +39,17 @@ $oldConfigEnv = $env:CAMPUS_CONFIG_PATH
 $env:CAMPUS_CONFIG_PATH = $ConfigPath
 $hook = "$PSScriptRoot\scripts\vpnc-hook.js"
 $arguments = @('--protocol=array', '--no-dtls', '--disable-ipv6', '--interface', $config.interfaceName, '--script', $hook)
+if ($Credential) {
+    $UserName=$Credential.UserName
+    $arguments += @('--passwd-on-stdin','--non-inter','--form-entry=form:method=')
+}
 if ($UserName) { $arguments += @('--user', $UserName) }
 $arguments += $config.server
 Write-Host 'Keep Clash running. Leave authgroup EMPTY; enter your campus username/password locally.'
 Write-Host 'Keep this terminal open. Press Ctrl+C to disconnect. No password or cookie is saved.'
 Write-Host "Session adapter: $($config.interfaceName)"
 $process = $null
+$backgroundProcess = $null
 $clashApplied = $false
 $pidPath = Join-Path $runtime 'process.json'
 try {
@@ -56,10 +62,17 @@ try {
     $info.WorkingDirectory = Split-Path $binary -Parent
     $info.UseShellExecute = $false
     # The child inherits this console for hidden password entry; stdin is not captured.
-    $process = [Diagnostics.Process]::Start($info)
+    if ($Credential) {
+        if (-not ('CampusBackgroundProcess' -as [type])) { Add-Type -Path "$PSScriptRoot\scripts\DesktopBridge.cs" }
+        $backgroundProcess=[CampusBackgroundProcess]::new($binary,$info.Arguments,$Credential.GetNetworkCredential().Password)
+        $process=$backgroundProcess.Process
+    } else { $process = [Diagnostics.Process]::Start($info) }
     Save-CampusState ([pscustomobject]@{id=$process.Id; path=$binary; startedAt=$process.StartTime.ToUniversalTime().ToString('o')}) $pidPath
     $lastReady = ''
     while (-not $process.HasExited) {
+        if ($Credential -and (Test-Path -LiteralPath "$runtime\disconnect-background.request") -and
+            (Get-Content -LiteralPath "$runtime\disconnect-background.request" -Raw) -eq $script:desktopStatus.session) { break }
+        if ($backgroundProcess) { Write-DesktopStatus 'connecting' 'Campus connection in progress' $backgroundProcess.Drain() }
         if (Test-Path -LiteralPath "$runtime\disconnect.request") {
             Write-Host 'Disconnect requested from the desktop panel.'
             break
@@ -78,13 +91,19 @@ try {
                     $clashApplied = $true
                 }
                 $lastReady = $state.connectedAt
+                if ($backgroundProcess) { Write-DesktopStatus 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
                 Write-Host 'READY: native campus route configuration is applied. Run Test-Connection.ps1 to verify access.'
             }
         }
+        if ($backgroundProcess -and $lastReady) { Write-DesktopStatus 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
         Start-Sleep -Milliseconds 500
         $process.Refresh()
     }
-    if ($process.ExitCode -ne 0) { throw "OpenConnect exited with code $($process.ExitCode)." }
+    if ($backgroundProcess -and $process.HasExited) {
+        $process.WaitForExit()
+        Write-DesktopStatus 'connecting' 'Background process finished' $backgroundProcess.Drain()
+    }
+    if ($process.HasExited -and $process.ExitCode -ne 0) { throw "OpenConnect exited with code $($process.ExitCode)." }
 } finally {
     if ($process -and -not $process.HasExited) {
         try { $process.Kill(); $process.WaitForExit(5000) | Out-Null }
@@ -97,5 +116,6 @@ try {
         catch { Write-Warning 'Clash restore needs attention. Run Apply-Clash.ps1 -Restore or Recover.ps1.' }
     }
     $lockHandle.Dispose()
+    if ($backgroundProcess) { $backgroundProcess.Dispose() }
     $env:CAMPUS_CONFIG_PATH = $oldConfigEnv
 }
