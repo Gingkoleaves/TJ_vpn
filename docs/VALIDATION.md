@@ -1,39 +1,42 @@
 # 验证记录
 
-日期：2026-10-01；Windows 11，本机 Clash Verge 2.4.2 / Mihomo 1.19.13。
+日期：2026-10-01；Windows 11；本机 Clash Verge Rev 2.4.2 / Mihomo 1.19.13。
 
-## 本轮已完成
+## Windows 原生连接
 
-再次登录实测：认证成功，但 OpenConnect 在打开旧名 `TongjiVPN` 时返回 0x490，未到达 connect hook。检查时没有可见校园网卡或 OpenConnect 进程；残留记录为推断原因。现改为每次连接生成唯一网卡名称，未删除网卡或卸载驱动。已增加会话名唯一性/长度检查，真实重连仍待验证。
+用户已确认 `v0.1.0-preview.3` 原生脚本连接成功。本机读取的状态中有校园 IPv4、学校下发的两台 DNS、SSH 目标及软件站的精确路由。使用唯一会话网卡名后，用户报告成功。
 
-用户原生登录实测：Array 认证成功，Windows 创建 `TongjiVPN`（接口描述 `OpenConnect Tunnel`）。旧版本 hook 因描述匹配错误而退出，尚未完成校园路由。已修复描述识别并加入 4 项回归检查：当前 21 项安全检查、6 项 HTTP 检查、5 项 Rust 检查通过。无校园通路时采样能完整输出校园超时及外网 HTTP 200，不再被 PowerShell NativeCommandError 中断。实际路由及校园访问仍待重新连接验证。
+此前两次失败分别定位到网卡描述判断错误，以及打开旧名网卡时的 0x490 错误。前者已修复并增加回归检查；后者通过唯一会话名绕过，残留网卡记录是推断原因，没有删除其他网络网卡或驱动。
 
-发布验证补充：HTTP 管道解析的 6 项检查通过（包括中文 UTF-8 分块响应）；已只读获取当前 Clash 的手选代理组，未退出或重启 Clash。
+用户反馈不是持续稳定性或 GUI 操作的完整测试证据；校园/外网同时访问仍应在当前连接中执行连接测试并保存结果。
+
+## 0.2.0 GUI 本地检查
 
 | 检查 | 结果 |
 |---|---|
-| 官方 OpenConnect 9.21 Windows x64 包下载、SHA256 校验与解包 | 通过 |
-| 原生 executable --version | array 协议与 Wintun DLL 可用 |
-| 原生 executable --protocol=array --authenticate --non-inter | 到达 authgroup 输入阶段；未提交密码 |
-| Windows JScript pre-init hook | 通过；未改变路由 |
-| PowerShell 文件语法 | 通过 |
-| PowerShell 安全检查 | 17 项通过：拒绝默认/非法/保留路由、参数转义、状态原子替换、接口编号复用保护 |
-| Rust 测试 | 5 项通过：外网配置保留、重复应用、冲突拒绝、状态/默认路由拒绝、校园 DNS 与网关独立 |
-| Rust fmt / clippy | 通过 |
-| 从当前实际 Clash YAML 生成候选配置并执行 Mihomo -t | 通过；未应用到运行中的 Clash |
-| 生成持久增强 JS 后在 Node 中执行 | 原外网节点和 TUN 保留 |
-| 本机 Clash 控制管道、规则模式、TUN、7897 端口 | 通过只读检查 |
+| PowerShell 文件解析 | 通过 |
+| PowerShell 路由、接口、参数、状态及会话名检查 | 23 项通过；使用模拟接口，不改真实网络 |
+| HTTP 命名管道解析 | 6 项通过，含中文 UTF-8 分块响应 |
+| Rust 配置生成测试 | 5 项通过 |
+| Rust exe 启动器资源检查 | 1 项通过 |
+| Rust fmt / clippy / release 构建 | 通过 |
+| WinForms 控件构建及界面预览 | 通过，未触发网络操作 |
+| 编译后的 exe 启动 GUI 构建检查 | 通过，未请求管理员权限或启动 VPN |
+| 官方 OpenConnect 9.21 下载、SHA256、解包及 array 支持 | 通过 |
+| JScript pre-init hook | 通过 |
+| 本机 Clash YAML 生成候选并执行 Mihomo 校验 | 通过 |
 
-## 本轮尚未完成
+GUI 连接按钮打开现有认证终端，不捕获密码。断开按钮请求连接程序执行清理；异常恢复沿用现有恢复脚本。GUI 行为需要真实本机交互验证。
 
-- Windows 原生客户端实际认证、Wintun 网卡创建与地址配置。
-- 原生隧道中的 SSH/软件站访问，以及与外网代理并行访问。
-- 原生连接重连、Ctrl+C 清理和强制终止后的真实恢复。
-- 连续运行至少 30 分钟、网络切换/休眠恢复。
-- 在第二台 Windows PC 上验证便携包。
+## 尚未完成
 
-以上项目需要用户本机输入密码，并保持原生连接运行。未完成前，版本只能作为预发布，不能宣称生产级稳定。
+- GUI 完整连接、断开、异常恢复流程。
+- 30 分钟以上持续连接及网络切换、休眠恢复。
+- 第二台 Windows PC 上的便携包运行。
+- 更广校园资源、IPv6、多因素/浏览器认证。
 
-## 前一阶段 WSL 证据（与原生验证区分）
+发布为预发布，未宣称生产级稳定。未停止 Clash。
 
-Ubuntu OpenConnect 的 Array 模式将 authgroup 留空后登录成功。经 WSL SOCKS / Clash 访问校园软件站 HTTP 200，同时 Google HTTP 200；用户实际 SSH 登录 user@192.0.2.10 成功。用户后来手动关闭 WSL，校园连接随之失效。这些记录只证明协议/学校账号路径在 Ubuntu 可用，不能证明 Windows 生命周期代码已验证。
+## 早期 WSL 证据
+
+Ubuntu Array 登录、校园软件站与外网并行访问及 `user@192.0.2.10` SSH 已在此前阶段成功。该证据与 Windows 原生和 GUI 验证区分记录。

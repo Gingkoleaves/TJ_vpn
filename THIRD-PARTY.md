@@ -16,3 +16,6 @@
 确切依赖版本固定在 Cargo.lock。直接依赖为 serde_json 和 serde_yaml_ng；完整依赖与 license 元数据可用 `cargo metadata --locked --format-version 1` 查看。源码可从 https://crates.io/ 下载。便携包包含本仓库 Rust helper；重新构建不需要任何个人配置。
 
 CI 中的 actions/checkout 和 dtolnay/rust-toolchain 仅用于构建和检查，不会登录校园网。
+# Distributed license texts
+
+The `third-party-licenses/` directory contains license and notice files for the Rust dependencies resolved by Cargo.lock. These are included in the portable ZIP alongside the MIT license for this project. The GUI executable is a Rust launcher; the WinForms panel uses the PowerShell and .NET components provided by Windows.

@@ -2,11 +2,20 @@
 
 用 OpenConnect 的 Array 协议替代卡死的 MotionPro，让 Windows 直接建立校园 VPN。Clash 保持开启，外网沿用原代理，指定校园目标通过独立 Wintun 网卡连接。
 
-**状态：0.1.0 预发布。Windows x64 原生客户端与生成配置已验证；Windows 实际登录、真实路由配置、持续连接和断开恢复仍待本机验证。不要把预发布当作已验证的生产级服务。** WSL OpenConnect 登录同济及 SSH 校内服务器已在此前实测成功，但不作为 Windows 原生版本的成功证据。
+**状态：0.2.0 GUI 预发布。用户已确认 Windows 原生脚本连接成功；GUI 构建、Rust 启动器和配置生成测试通过。持续连接、休眠恢复、GUI 完整连接/断开流程及第二台电脑仍待验证。** 当前仍为预发布，不能宣称已达到生产级稳定性。
 
 ## 快速开始
 
-使用 `dist/` 中的便携 ZIP，可不安装 Rust。安装好 7-Zip 后解压 ZIP，双击 **Start.cmd** 即可：首次启动会自动下载、校验和解包 OpenConnect，再进入登录。不要在 ZIP 内直接运行。
+使用 `dist/tongji-openconnect-0.2.0-preview.3-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**，允许管理员权限，即可打开中文管理面板。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
+
+1. 点击 **连接校园网**：打开本机认证终端。首次连接会自动下载、校验和解包 OpenConnect。
+2. 在终端认证：authgroup 留空，输入校园账号密码；保持这个终端运行。
+3. 面板显示校园网卡已连接后，点击 **连接测试**，核对校园和外网返回 HTTP 200。面板不会把“网卡已连接”当作实际可达性证明。
+4. 点击 **断开连接**：向连接程序发送退出请求，由它清理校园路由并恢复 Clash。面板关闭后连接继续运行。
+
+面板还提供环境检查、校园目标配置、使用说明和日志目录。异常恢复用于连接程序无法正常退出时，会要求确认后结束本仓库的 VPN；不退出 Clash。密码在独立终端输入，不进入 GUI 或其日志。
+
+**GUI 管理面板 + 本机认证终端** 是本版产品形态；没有实现 GUI 密码框或免密后台服务。纯命令行使用者仍可双击 **Start.cmd**。
 
 也可以手动准备客户端：
 
@@ -114,7 +123,7 @@ Windows SSH ── 校园目标专用路由 ── TongjiVPN ── 校内服务
 git log --oneline
 ```
 
-PowerShell 负责生命周期与 Windows 网络接口，Rust 负责 YAML/增强脚本生成。Rust lockfile 已提交；GitHub Actions 在 Windows 跑本地测试，不进行校园登录。ZIP 使用明确的文件白名单，不包含运行状态、账号配置、用户订阅、代理凭据或周围工作目录。
+PowerShell / WinForms 负责管理面板、生命周期与 Windows 网络接口，Rust 负责 exe 启动器及 YAML/增强脚本生成。Rust lockfile 已提交；GitHub Actions 在 Windows 跑本地测试，不进行校园登录。ZIP 使用明确的文件白名单，不包含运行状态、账号配置、用户订阅、代理凭据或周围工作目录；附带 SHA256 文件。
 
 具体验证结果见 [docs/VALIDATION.md](docs/VALIDATION.md)。
 

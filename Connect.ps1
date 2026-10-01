@@ -47,6 +47,7 @@ $process = $null
 $clashApplied = $false
 $pidPath = Join-Path $runtime 'process.json'
 try {
+    Remove-Item -LiteralPath "$runtime\disconnect.request" -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath "$runtime\hook-error.txt" -ErrorAction SilentlyContinue
     Remove-CampusState "$runtime\state.json"
     $info = [Diagnostics.ProcessStartInfo]::new()
@@ -59,6 +60,10 @@ try {
     Save-CampusState ([pscustomobject]@{id=$process.Id; path=$binary; startedAt=$process.StartTime.ToUniversalTime().ToString('o')}) $pidPath
     $lastReady = ''
     while (-not $process.HasExited) {
+        if (Test-Path -LiteralPath "$runtime\disconnect.request") {
+            Write-Host 'Disconnect requested from the desktop panel.'
+            break
+        }
         if (Test-Path -LiteralPath "$runtime\hook-error.txt") {
             throw ('Campus hook failed: ' + (Get-Content -LiteralPath "$runtime\hook-error.txt" -Raw -Encoding UTF8))
         }

@@ -1,0 +1,27 @@
+name: Build portable preview
+on:
+  workflow_dispatch:
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - shell: powershell
+        run: |
+          .\Test.ps1
+          .\Build.ps1
+          $launcher = Start-Process .\TongjiVPN.exe -ArgumentList '--smoke-test' -PassThru -Wait
+          if ($launcher.ExitCode -ne 0) { throw 'Compiled launcher failed.' }
+          .\Package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tongji-openconnect-windows-x64-preview
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
