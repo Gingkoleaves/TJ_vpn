@@ -13,14 +13,9 @@ public static class CampusWindow {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
 }
 '@
-if (-not $SmokeTest) {
-    try { Assert-Administrator }
-    catch {
-        Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"')
-        return
-    }
-}
-$mutex = [Threading.Mutex]::new($false, 'Local\TongjiOpenConnectDesktop')
+# The panel itself does not need elevation. Only the existing connection and
+# recovery entry points request administrator rights when a network change is needed.
+$mutex = [Threading.Mutex]::new($false, 'Local\TongjiOpenConnectDesktopV2')
 $ownsMutex = $SmokeTest -or $mutex.WaitOne(0)
 if (-not $ownsMutex) {
     $existingWindow=[CampusWindow]::FindWindow($null,'同济校园 VPN · 0.2.0 预发布')
@@ -73,6 +68,11 @@ function Add-Log([string]$Text) {
 }
 function Start-PanelTask([string]$File,[string]$Label) {
     if ($script:task) { Add-Log '上一项操作尚未结束，请稍候。'; return }
+    if ($File -eq 'Recover.ps1') {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$PSScriptRoot+'\Recover.ps1"')
+        Add-Log '已打开管理员恢复终端；请查看该终端结果。'
+        return
+    }
     New-Item -ItemType Directory -Path $runtime -Force | Out-Null
     $id=[Guid]::NewGuid().ToString('N')
     $stdout=Join-Path $runtime "gui-$id.out.log"
@@ -136,7 +136,9 @@ function Update-Panel {
         if (Test-Path -LiteralPath $pidPath) {
             $owner=Get-Content -LiteralPath $pidPath -Raw -Encoding UTF8 | ConvertFrom-Json
             $process=Get-Process -Id $owner.id -ErrorAction SilentlyContinue
-            $script:liveProcess=[bool]($process -and $process.Path -eq $owner.path -and $process.StartTime.ToUniversalTime().ToString('o') -eq $owner.startedAt)
+            $expectedBinary=Join-Path $PSScriptRoot 'vendor\openconnect\openconnect.exe'
+            $script:liveProcess=[bool]($process -and $process.ProcessName -eq 'openconnect' -and $owner.path -eq $expectedBinary -and
+                (-not $process.Path -or $process.Path -eq $owner.path) -and $process.StartTime.ToUniversalTime().ToString('o') -eq $owner.startedAt)
         }
         $statePath=Join-Path $runtime 'state.json'
         if (Test-Path -LiteralPath $statePath) {
@@ -190,7 +192,7 @@ try {
         if ($form.Controls.Count -lt 15) { throw 'Panel controls are missing.' }
         Write-Host 'GUI construction smoke test passed. No network action performed.'
     } else {
-        Update-Panel; $timer.Start()
+        $timer.Start()
         # The elevated PowerShell host uses SW_HIDE for its console. Explicitly
         # show the panel after its first ShowWindow consumes that startup flag.
         $form.Show()

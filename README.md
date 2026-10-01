@@ -6,7 +6,7 @@
 
 ## 快速开始
 
-使用 `dist/tongji-openconnect-0.2.0-preview.3-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**，允许管理员权限，即可打开中文管理面板。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
+使用 `dist/tongji-openconnect-0.2.0-preview.4-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe** 即可打开中文管理面板。面板使用普通权限，连接或异常恢复时才请求管理员权限。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
 
 1. 点击 **连接校园网**：打开本机认证终端。首次连接会自动下载、校验和解包 OpenConnect。
 2. 在终端认证：authgroup 留空，输入校园账号密码；保持这个终端运行。

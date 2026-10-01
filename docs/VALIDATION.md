@@ -21,6 +21,7 @@
 | Rust exe 启动器资源检查 | 1 项通过 |
 | Rust fmt / clippy / release 构建 | 通过 |
 | WinForms 控件构建及界面预览 | 通过，未触发网络操作 |
+| 普通权限真实启动 | 系统检测到新面板的非零主窗口句柄和正确中文标题；未触发 VPN 操作 |
 | 编译后的 exe 启动 GUI 构建检查 | 通过，未请求管理员权限或启动 VPN |
 | 官方 OpenConnect 9.21 下载、SHA256、解包及 array 支持 | 通过 |
 | JScript pre-init hook | 通过 |
