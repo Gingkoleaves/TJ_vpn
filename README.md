@@ -6,7 +6,7 @@
 
 ## 快速开始
 
-使用 `dist/tongji-openconnect-0.3.0-preview.1-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**。面板使用普通权限，连接时请求管理员权限，后台 shell 不显示。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
+使用 `dist/tongji-openconnect-0.3.0-preview.2-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**。面板使用普通权限，连接时请求管理员权限，后台 shell 不显示。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
 
 1. **配置**：填写校内主机 IP，每行一个；只展示 IP，不展示 VPN、DNS 或 Clash 参数。
 2. 在主界面输入校园账号和密码，点击 **连接**，允许 UAC。首次连接会自动准备客户端，authgroup 自动填空，不需要管理员终端输入。

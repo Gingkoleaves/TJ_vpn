@@ -1,4 +1,4 @@
-param([string]$Version = '0.3.0-preview.1')
+param([string]$Version = '0.3.0-preview.2')
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$') { throw 'Invalid package version.' }
 $helper = "$PSScriptRoot\bin\campus-config.exe"

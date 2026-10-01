@@ -4,9 +4,12 @@ param(
     [string]$ClashDirectory = "$env:APPDATA\io.github.clash-verge-rev.clash-verge-rev",
     [string]$MihomoPath,
     [switch]$NoClash,
-    [pscredential]$Credential
+    [pscredential]$Credential,
+    $DesktopContext
 )
 . "$PSScriptRoot\scripts\Clash.ps1"
+. "$PSScriptRoot\scripts\DesktopStatus.ps1"
+if ($Credential -and -not $DesktopContext) { throw 'Background credentials require an explicit desktop status context.' }
 Assert-Administrator
 if (-not (Test-Path -LiteralPath $ConfigPath)) { Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination $ConfigPath }
 $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath).Path
@@ -71,8 +74,8 @@ try {
     $lastReady = ''
     while (-not $process.HasExited) {
         if ($Credential -and (Test-Path -LiteralPath "$runtime\disconnect-background.request") -and
-            (Get-Content -LiteralPath "$runtime\disconnect-background.request" -Raw) -eq $script:desktopStatus.session) { break }
-        if ($backgroundProcess) { Write-DesktopStatus 'connecting' 'Campus connection in progress' $backgroundProcess.Drain() }
+            (Get-Content -LiteralPath "$runtime\disconnect-background.request" -Raw) -eq $DesktopContext.State.session) { break }
+        if ($backgroundProcess) { Write-DesktopStatus $DesktopContext 'connecting' 'Campus connection in progress' $backgroundProcess.Drain() }
         if (Test-Path -LiteralPath "$runtime\disconnect.request") {
             Write-Host 'Disconnect requested from the desktop panel.'
             break
@@ -91,17 +94,17 @@ try {
                     $clashApplied = $true
                 }
                 $lastReady = $state.connectedAt
-                if ($backgroundProcess) { Write-DesktopStatus 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
+                if ($backgroundProcess) { Write-DesktopStatus $DesktopContext 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
                 Write-Host 'READY: native campus route configuration is applied. Run Test-Connection.ps1 to verify access.'
             }
         }
-        if ($backgroundProcess -and $lastReady) { Write-DesktopStatus 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
+        if ($backgroundProcess -and $lastReady) { Write-DesktopStatus $DesktopContext 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
         Start-Sleep -Milliseconds 500
         $process.Refresh()
     }
     if ($backgroundProcess -and $process.HasExited) {
         $process.WaitForExit()
-        Write-DesktopStatus 'connecting' 'Background process finished' $backgroundProcess.Drain()
+        Write-DesktopStatus $DesktopContext 'connecting' 'Background process finished' $backgroundProcess.Drain()
     }
     if ($process.HasExited -and $process.ExitCode -ne 0) { throw "OpenConnect exited with code $($process.ExitCode)." }
 } finally {
