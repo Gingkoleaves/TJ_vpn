@@ -20,7 +20,18 @@ function ConvertFrom-PublicDnsResponse($Response) {
 function Get-PublicDnsAnswers([string]$HostName,[int]$ProxyPort) {
     $encoded=[Uri]::EscapeDataString($HostName)
     [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
-    $response=Invoke-RestMethod -Uri "https://dns.google/resolve?name=$encoded&type=A" -Proxy "http://127.0.0.1:$ProxyPort" -TimeoutSec 8 -ErrorAction Stop
+    $options=@{Uri="https://dns.google/resolve?name=$encoded&type=A";TimeoutSec=8;ErrorAction='Stop'}
+    if ($ProxyPort -gt 0) { $options.Proxy="http://127.0.0.1:$ProxyPort" }
+    if ($ProxyPort -gt 0) { $response=Invoke-RestMethod @options }
+    else {
+        $request=[Net.HttpWebRequest]::Create($options.Uri)
+        $request.Proxy=$null; $request.Timeout=8000; $request.ReadWriteTimeout=8000
+        $reply=$request.GetResponse()
+        try {
+            $reader=[IO.StreamReader]::new($reply.GetResponseStream())
+            try { $response=$reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+        } finally { $reply.Dispose() }
+    }
     return ConvertFrom-PublicDnsResponse $response
 }
 
@@ -46,7 +57,9 @@ function Resolve-CampusTarget([string]$HostName,$State,$Config) {
         } catch { $errors += "Campus DNS ${server}: $($_.Exception.GetBaseException().Message)" }
     }
     try {
-        $answers=@(Get-PublicDnsAnswers $HostName $Config.clashProxyPort)
+        $port=$Config.clashProxyPort
+        if ($Config.PSObject.Properties['connectionMode'] -and $Config.connectionMode -eq 'direct') { $port=0 }
+        $answers=@(Get-PublicDnsAnswers $HostName $port)
         if (-not $answers.Count) { throw 'No IPv4 answers.' }
         return [pscustomobject]@{hostName=$HostName;addresses=$answers;dnsSource='public';error=$null}
     } catch { $errors += "Public DNS: $($_.Exception.GetBaseException().Message)" }

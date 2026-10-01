@@ -35,3 +35,12 @@ $script:campusWorks=$true
 $result=Resolve-CampusTarget 'node.campus.example' $state $config
 if ($result.dnsSource -ne 'campus') { throw 'Local reference must not override live DNS' }
 Write-Host '4 local-reference and node-selection checks passed using documentation-only addresses.'
+$script:campusWorks=$false; $script:publicWorks=$true; $script:lastPort=-1
+function Get-PublicDnsAnswers { param($HostName,$ProxyPort) $script:lastPort=$ProxyPort; return '192.0.2.11' }
+$config | Add-Member -NotePropertyName connectionMode -NotePropertyValue 'direct' -Force
+$result=Resolve-CampusTarget 'node.campus.example' $state $config
+if ($script:lastPort -ne 0 -or $result.dnsSource -ne 'public') { throw 'Direct DNS still depends on Clash.' }
+$config.connectionMode='clash'
+$result=Resolve-CampusTarget 'node.campus.example' $state $config
+if ($script:lastPort -ne 7897) { throw 'Proxy DNS lost configured port.' }
+Write-Host '2 mode-specific DNS checks passed.'

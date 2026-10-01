@@ -13,4 +13,6 @@
 
 /config.hosts.local.json
 /config.hosts.local.json.*
+/connection.local.json
+/connection.local.json.*
 /resources/

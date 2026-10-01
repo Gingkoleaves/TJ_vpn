@@ -2,6 +2,9 @@ param([int]$Count = 1, [int]$IntervalSeconds = 10, [string]$ConfigPath = "$PSScr
 . "$PSScriptRoot\scripts\Common.ps1"
 if ($Count -lt 1 -or $Count -gt 10000 -or $IntervalSeconds -lt 0) { throw 'Invalid sampling options.' }
 $config = Read-CampusConfig $ConfigPath
+$sessionPath=Join-Path $PSScriptRoot 'runtime\session-config.json'
+if (Test-Path -LiteralPath $sessionPath) { $config=Read-CampusConfig $sessionPath }
+$direct=$config.PSObject.Properties['connectionMode'] -and $config.connectionMode -eq 'direct'
 New-Item -ItemType Directory -Path "$PSScriptRoot\runtime" -Force | Out-Null
 $statePath = "$PSScriptRoot\runtime\state.json"
 $results = @()
@@ -17,7 +20,8 @@ for ($sample = 1; $sample -le $Count; $sample++) {
         $savedPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $result = & curl.exe -sS --proxy "http://127.0.0.1:$($config.clashProxyPort)" --connect-timeout 5 --max-time 15 -o NUL -w '%{http_code},%{time_total}' $test.url 2>$errorFile
+            $proxyArgs=if($direct){@('--noproxy','*')}else{@('--proxy',"http://127.0.0.1:$($config.clashProxyPort)")}
+            $result = & curl.exe -sS @proxyArgs --connect-timeout 5 --max-time 15 -o NUL -w '%{http_code},%{time_total}' $test.url 2>$errorFile
             $curlExit = $LASTEXITCODE
         } finally { $ErrorActionPreference = $savedPreference }
         $parts = ([string]$result).Split(',')

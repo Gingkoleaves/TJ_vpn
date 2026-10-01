@@ -1,19 +1,27 @@
-param(
+﻿param(
     [string]$ConfigPath = "$PSScriptRoot\config.local.json",
     [string]$UserName,
     [string]$ClashDirectory = "$env:APPDATA\io.github.clash-verge-rev.clash-verge-rev",
     [string]$MihomoPath,
     [switch]$NoClash,
+    [string]$ClashPipe,
+    [int]$ClashProxyPort,
     [pscredential]$Credential,
     $DesktopContext
 )
 . "$PSScriptRoot\scripts\Clash.ps1"
 . "$PSScriptRoot\scripts\DesktopStatus.ps1"
+. "$PSScriptRoot\scripts\DirectDns.ps1"
+. "$PSScriptRoot\scripts\ConnectionMode.ps1"
 if ($Credential -and -not $DesktopContext) { throw 'Background credentials require an explicit desktop status context.' }
 Assert-Administrator
 if (-not (Test-Path -LiteralPath $ConfigPath)) { Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination $ConfigPath }
 $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath).Path
 $config = Read-CampusConfig $ConfigPath
+if ($ClashPipe) { $config.clashPipe=$ClashPipe }
+if ($ClashProxyPort) { $config.clashProxyPort=$ClashProxyPort }
+$config | Add-Member -NotePropertyName connectionMode -NotePropertyValue $(if($NoClash){'direct'}else{'clash'}) -Force
+if ($NoClash -and (Get-ProxyPresence $config.clashPipe $config.clashProxyPort)) { throw '直连模式检测到运行中的代理，请使用 GUI 代理联动。现有代理未改动。' }
 if (-not $NoClash) {
     Assert-ClashHealth $config.clashPipe $config.clashProxyPort
     $MihomoPath = Find-Mihomo $MihomoPath
@@ -31,6 +39,8 @@ $runtime = "$PSScriptRoot\runtime"
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 $lockPath = Join-Path $runtime 'connection.lock'
 $lockHandle = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+try { Restore-DirectHostMappings (Join-Path $runtime 'direct-dns.json') }
+catch { $lockHandle.Dispose(); throw }
 $baseInterfaceName = $config.interfaceName
 # OpenConnect treats a stale registry match as a hard failure when Wintun
 # cannot reopen it. Use a distinct name for each connection, without deleting
@@ -89,16 +99,20 @@ try {
             if ($state.error) { throw "Campus route setup failed: $($state.error)" }
             if ($state.connected -and $state.connectedAt -ne $lastReady) {
                 & "$PSScriptRoot\Update-CampusRoutes.ps1" -ConfigPath $ConfigPath -DesktopContext $DesktopContext
+                $state=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $state | Add-Member -NotePropertyName connectionMode -NotePropertyValue $config.connectionMode -Force
+                Save-CampusState $state $statePath
+                if ($NoClash) { Set-DirectHostMappings $state.domains (Join-Path $runtime 'direct-dns.json') }
                 if (-not $NoClash) {
                     & "$PSScriptRoot\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath
                     $clashApplied = $true
                 }
                 $lastReady = $state.connectedAt
-                if ($backgroundProcess) { Write-DesktopStatus $DesktopContext 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
+                if ($backgroundProcess) { Write-DesktopStatus $DesktopContext 'ready' ("Campus routes ready; mode: "+$config.connectionMode) $backgroundProcess.Drain() }
                 Write-Host 'READY: native campus route configuration is applied. Run Test-Connection.ps1 to verify access.'
             }
         }
-        if ($backgroundProcess -and $lastReady) { Write-DesktopStatus $DesktopContext 'ready' 'Campus routes and Clash outlet are configured' $backgroundProcess.Drain() }
+        if ($backgroundProcess -and $lastReady) { Write-DesktopStatus $DesktopContext 'ready' ("Campus routes ready; mode: "+$config.connectionMode) $backgroundProcess.Drain() }
         Start-Sleep -Milliseconds 500
         $process.Refresh()
     }
@@ -114,6 +128,10 @@ try {
     }
     try { Remove-CampusState "$runtime\state.json" }
     catch { Write-Warning 'Route cleanup needs attention; run Recover.ps1.' }
+    if ($NoClash) {
+        try { Restore-DirectHostMappings (Join-Path $runtime 'direct-dns.json') }
+        catch { Write-Warning '校园域名映射恢复失败，请使用 GUI 异常恢复。' }
+    }
     if ($clashApplied) {
         try { & "$PSScriptRoot\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath -Restore }
         catch { Write-Warning 'Clash restore needs attention. Run Apply-Clash.ps1 -Restore or Recover.ps1.' }

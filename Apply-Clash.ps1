@@ -6,18 +6,19 @@ param(
 )
 . "$PSScriptRoot\scripts\Clash.ps1"
 $config = Read-CampusConfig $ConfigPath
-$directory = (Resolve-Path -LiteralPath $ClashDirectory).Path
 $runtime = "$PSScriptRoot\runtime"
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 $changePath = Join-Path $runtime 'clash-change.json'
 $helper = "$PSScriptRoot\bin\campus-config.exe"
 if (-not (Test-Path -LiteralPath $helper)) { $helper = "$PSScriptRoot\target\release\campus-config.exe" }
-Assert-ClashHealth $config.clashPipe $config.clashProxyPort
 
 if ($Restore) {
     if (-not (Test-Path -LiteralPath $changePath)) { Write-Host 'No Clash change to restore.'; return }
     $change = Get-Content -LiteralPath $changePath -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $change.active) { Write-Host 'Clash already restored.'; return }
+    if ($change.PSObject.Properties['clashDirectory']) { $ClashDirectory=$change.clashDirectory; $MihomoPath=$change.mihomoPath; $config.clashPipe=$change.clashPipe; $config.clashProxyPort=$change.clashProxyPort }
+    $directory = (Resolve-Path -LiteralPath $ClashDirectory).Path
+    Assert-ClashHealth $config.clashPipe $config.clashProxyPort
     $currentHash = (Get-FileHash -LiteralPath $change.scriptPath).Hash
     $baseHash = (Get-FileHash -LiteralPath $change.baseScript).Hash
     if ($currentHash -ne $change.installedScriptHash -and $currentHash -ne $baseHash) {
@@ -39,6 +40,8 @@ if ($Restore) {
     return
 }
 
+Assert-ClashHealth $config.clashPipe $config.clashProxyPort
+$directory = (Resolve-Path -LiteralPath $ClashDirectory).Path
 if (-not (Test-Path -LiteralPath $helper)) { throw 'Run Build.ps1 or use the packaged release (Rust helper is missing).' }
 $statePath = Join-Path $runtime 'state.json'
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -73,6 +76,7 @@ $validationExit = $LASTEXITCODE
 $ErrorActionPreference = $oldPreference
 if ($validationExit -ne 0) { throw 'Mihomo rejected candidate. Live Clash remains unchanged.' }
 $newChange = [pscustomobject]@{
+    clashDirectory=$directory; mihomoPath=$kernel; clashPipe=$config.clashPipe; clashProxyPort=$config.clashProxyPort
     active=$true; scriptPath=$scriptPath; baseScript=$baseScript; restoreRuntime=$restoreRuntime
     installedScriptHash=(Get-FileHash -LiteralPath $generatedScript).Hash; appliedAt=(Get-Date).ToString('o')
     selections=if($change -and $change.active){$change.selections}else{Get-ClashSelections $config.clashPipe}

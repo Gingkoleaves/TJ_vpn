@@ -2,6 +2,8 @@
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\scripts\Common.ps1"
 . "$PSScriptRoot\scripts\DesktopConfig.ps1"
+. "$PSScriptRoot\scripts\ConnectionMode.ps1"
+. "$PSScriptRoot\scripts\ProxySettings.ps1"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -Path "$PSScriptRoot\scripts\DesktopBridge.cs"
@@ -53,7 +55,7 @@ function Add-Label([string]$Text, [int]$X, [int]$Y, [int]$Width, [int]$Height) {
 }
 $title = Add-Label '同济校园 VPN' 24 20 600 40
 $title.Font = [Drawing.Font]::new('Microsoft YaHei UI',20,[Drawing.FontStyle]::Bold)
-$subtitle = Add-Label 'Windows 原生连接 · 校园分流 · Clash 保持运行' 26 68 730 28
+$subtitle = Add-Label 'Windows 原生连接 · 校园分流 · 自动兼容有 / 无代理' 26 68 730 28
 $script:statusLabel = Add-Label '正在读取连接状态…' 26 114 730 32
 $script:statusLabel.Font=[Drawing.Font]::new('Microsoft YaHei UI',13,[Drawing.FontStyle]::Bold)
 $script:detailLabel = Add-Label '连接状态以网卡和进程为准，实际可达性请运行连接测试。' 26 154 730 55
@@ -82,8 +84,9 @@ function Add-Log([string]$Text) {
 function Start-PanelTask([string]$File,[string]$Label) {
     if ($script:task) { Add-Log '上一项操作尚未结束，请稍候。'; return }
     if ($File -eq 'Recover.ps1') {
-        Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$PSScriptRoot+'\Recover.ps1"')
-        Add-Log '已打开管理员恢复终端；请查看该终端结果。'
+        $worker=Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+$PSScriptRoot+'\Recover.ps1" -GuiResultPath "'+$runtime+'\recovery-result.json"')
+        $script:task=[pscustomobject]@{process=$worker;stdout='';stderr='';label=$Label}
+        Add-Log '已启动管理员恢复后台；结果将显示在窗口内。'
         return
     }
     New-Item -ItemType Directory -Path $runtime -Force | Out-Null
@@ -103,6 +106,10 @@ $connect=Add-Button '连接' 26 332 170 {
         if ($script:connected -or $script:liveProcess -or $script:authSession) { Add-Log '已有校园连接或认证操作。'; return }
         if ($script:task) { Add-Log '请等待当前操作完成。'; return }
         if ($script:connectionWindow -and -not $script:connectionWindow.HasExited) { Add-Log '后台连接正在运行，请稍候。'; return }
+        $script:settings.mode=@('auto','direct','clash')[$script:modeBox.SelectedIndex]
+        Save-CampusState $script:settings $script:settingsPath
+        $resolved=Resolve-ConnectionMode $script:settings
+        Add-Log $resolved.message
         [CampusCredentialServer]::Validate($script:userBox.Text,$script:passwordBox.Text)
         $pipeName='tongji-auth-'+[Guid]::NewGuid().ToString('N')
         $server=[CampusCredentialServer]::new($pipeName)
@@ -140,6 +147,20 @@ $script:logBox.ReadOnly=$true; $script:logBox.BackColor=[Drawing.Color]::White
 $script:logBox.Anchor='Top,Bottom,Left,Right'; $form.Controls.Add($script:logBox)
 $footer=Add-Label '密码不保存；关闭面板后已建立的 VPN 继续运行。退出校园网请点击“断开连接”。' 26 648 730 32
 $footer.Anchor='Bottom,Left,Right'
+$form.Size=[Drawing.Size]::new(800,790); $form.MinimumSize=$form.Size
+foreach ($control in @($form.Controls)) { if ($control.Top -ge 332 -and $control -ne $footer) { $control.Top+=60 } }
+$script:logBox.Height=240
+$script:settingsPath=Join-Path $PSScriptRoot 'connection.local.json'
+$script:settings=Read-ConnectionSettings $script:settingsPath
+$modeLabel=Add-Label '连接方式' 26 302 90 28
+$script:modeBox=[Windows.Forms.ComboBox]::new(); $script:modeBox.DropDownStyle='DropDownList'; $script:modeBox.SetBounds(112,299,240,30)
+[void]$script:modeBox.Items.AddRange(@('自动选择（推荐）','校园 VPN 直连','校园 VPN + 代理联动'))
+$script:modeBox.SelectedIndex=[Array]::IndexOf(@('auto','direct','clash'),$script:settings.mode); $form.Controls.Add($script:modeBox)
+$detect=Add-Button '重新检测' 398 294 170 { Invoke-Safely { $script:settings.mode=@('auto','direct','clash')[$script:modeBox.SelectedIndex]; $result=Resolve-ConnectionMode $script:settings; Add-Log ($result.message+' '+$result.mihomoPath) } }
+$proxySettings=Add-Button '代理设置' 584 294 170 { Invoke-Safely { if ((Show-ProxySettings $form $script:settings $script:settingsPath) -eq 'OK') { $script:settings=Read-ConnectionSettings $script:settingsPath; Add-Log '代理设置已保存，下次连接生效。' } } }
+$test=Add-Button '连接测试' 26 343 170 { Invoke-Safely { Start-PanelTask 'Test-Connection.ps1' '连接测试' } }
+$recover=Add-Button '异常恢复' 212 343 170 { Invoke-Safely { if ($script:authSession) { throw '请先断开当前认证操作。' }; Start-PanelTask 'Recover.ps1' '异常恢复' } }
+$modeNote=Add-Label '自动检测不会关闭 Clash；运行中的代理异常时，请检查代理设置。' 398 349 360 34
 function Update-Panel {
     $script:connected=$false; $script:liveProcess=$false
     $state=$null
@@ -177,7 +198,7 @@ function Update-Panel {
         if ($script:connected) {
             $script:statusLabel.Text='校园网卡已连接 · 请测试实际可达性'
             $script:statusLabel.ForeColor=[Drawing.Color]::FromArgb(20,120,70)
-            $script:detailLabel.Text='校园连接已建立。可访问配置中的校园主机；外网继续使用 Clash。'
+            $script:detailLabel.Text=if($state.PSObject.Properties['connectionMode'] -and $state.connectionMode -eq 'direct'){'校园直连已建立；外网沿用原网络。'}else{'校园连接已建立；外网继续使用 Clash。'}
         } elseif ($script:liveProcess) {
             $script:statusLabel.Text='连接中 / 等待本机认证'
             $script:statusLabel.ForeColor=[Drawing.Color]::FromArgb(150,100,20)
@@ -210,15 +231,18 @@ function Update-Panel {
         $script:userBox.Enabled=(-not $script:authSession)
         $script:passwordBox.Enabled=(-not $script:authSession)
         $disconnect.Enabled=($script:liveProcess -or $busyWorker)
+        $script:modeBox.Enabled=$connect.Enabled; $proxySettings.Enabled=$connect.Enabled; $detect.Enabled=$connect.Enabled
+        $recover.Enabled=(-not $script:task -and -not $script:authSession)
         if ($script:task -and $script:task.process.HasExited) {
             $script:task.process.Refresh()
             foreach ($path in @($script:task.stdout,$script:task.stderr)) {
-                if (Test-Path -LiteralPath $path) {
+                if ($path -and (Test-Path -LiteralPath $path)) {
                     $output=Get-Content -LiteralPath $path -Raw
                     if ($output) { Add-Log $output.Trim() }
                 }
             }
             Add-Log "$($script:task.label) 完成，退出码：$($script:task.process.ExitCode)"
+            if ($script:task.label -eq '异常恢复' -and (Test-Path -LiteralPath (Join-Path $runtime 'recovery-result.json'))) { $recovery=Get-Content -LiteralPath (Join-Path $runtime 'recovery-result.json') -Raw -Encoding UTF8 | ConvertFrom-Json; Add-Log $recovery.message }
             $script:task.process.Dispose(); $script:task=$null
         }
     } catch { $script:statusLabel.Text='状态读取失败'; Add-Log $_.Exception.Message }
@@ -236,7 +260,7 @@ try {
             finally { $bitmap.Dispose(); $form.Hide() }
         }
         $buttonTexts=@($form.Controls | Where-Object { $_ -is [Windows.Forms.Button] } | ForEach-Object Text)
-        if (($buttonTexts -join ',') -ne '连接,断开,配置,日志') { throw 'Panel must contain exactly the four requested buttons.' }
+        if (($buttonTexts -join ',') -ne '连接,断开,配置,日志,重新检测,代理设置,连接测试,异常恢复') { throw 'Panel controls missing.' }
         if (-not $script:passwordBox.UseSystemPasswordChar) { throw 'Password field is not masked.' }
         $configFixture=Join-Path $PSScriptRoot 'runtime\tests\gui-config.json'
         New-Item -ItemType Directory -Path (Split-Path $configFixture -Parent) -Force | Out-Null
@@ -244,6 +268,11 @@ try {
         $editorResult=Show-CampusHostEditor $form $configFixture -SmokeTest
         $edited=Read-CampusConfig $configFixture
         if ($editorResult -ne 'OK' -or $edited.routes.Count -ne 2 -or $edited.routes[1] -ne '192.0.2.11/32' -or $edited.hosts[0] -ne 'node.campus.example') { throw 'Mixed target configuration dialog save failed.' }
+        $proxyFixture=Join-Path $PSScriptRoot 'runtime\tests\gui-proxy.json'
+        $fixtureSettings=Read-ConnectionSettings (Join-Path $PSScriptRoot 'runtime\tests\no-settings.json')
+        if ((Show-ProxySettings $form $fixtureSettings $proxyFixture -SmokeTest) -ne 'OK') { throw 'Proxy dialog failed.' }
+        $savedSettings=Read-ConnectionSettings $proxyFixture
+        if ($savedSettings.mode -ne 'auto' -or $savedSettings.clashProxyPort -ne 7897 -or $savedSettings.mihomoPath -ne '') { throw 'Proxy settings did not round-trip.' }
         Write-Host 'GUI construction smoke test passed. No network action performed.'
     } else {
         $timer.Start()

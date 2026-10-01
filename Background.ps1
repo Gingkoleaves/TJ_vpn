@@ -1,6 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$PipeName, [Parameter(Mandatory=$true)][int]$GuiProcessId)
 . "$PSScriptRoot\scripts\Common.ps1"
 . "$PSScriptRoot\scripts\DesktopStatus.ps1"
+. "$PSScriptRoot\scripts\ConnectionMode.ps1"
 if ($PipeName -notmatch '^tongji-auth-[a-f0-9]{32}$') { throw 'Invalid authentication pipe.' }
 $runtime=Join-Path $PSScriptRoot 'runtime'
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
@@ -9,6 +10,8 @@ $desktopContext=New-DesktopStatusContext $statusPath $PipeName
 $credential=$null
 try {
     Assert-Administrator
+    $settings=Read-ConnectionSettings (Join-Path $PSScriptRoot 'connection.local.json')
+    $resolved=Resolve-ConnectionMode $settings
     Add-Type -Path "$PSScriptRoot\scripts\DesktopBridge.cs"
     Write-DesktopStatus $desktopContext 'auth' 'Waiting for GUI credential handoff'
     $values=[CampusCredentialClient]::Receive($PipeName,$GuiProcessId)
@@ -23,7 +26,7 @@ try {
         return
     }
     Write-DesktopStatus $desktopContext 'connecting' 'Authenticating and creating campus tunnel'
-    & "$PSScriptRoot\Connect.ps1" -Credential $credential -DesktopContext $desktopContext
+    & "$PSScriptRoot\Connect.ps1" -Credential $credential -DesktopContext $desktopContext -NoClash:($resolved.mode -eq 'direct') -MihomoPath $resolved.mihomoPath -ClashDirectory $settings.clashDirectory -ClashPipe $settings.clashPipe -ClashProxyPort $settings.clashProxyPort
     Write-DesktopStatus $desktopContext 'disconnected' 'Campus connection stopped; cleanup completed'
 } catch {
     Write-DesktopStatus $desktopContext 'error' $_.Exception.Message

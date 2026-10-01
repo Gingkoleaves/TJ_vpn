@@ -14,6 +14,7 @@ Write-Host 'PowerShell syntax passed.'
 & "$PSScriptRoot\tests\Test-DesktopStatus.ps1"
 & "$PSScriptRoot\tests\Test-CampusDns.ps1"
 & "$PSScriptRoot\tests\Test-TargetResolution.ps1"
+& "$PSScriptRoot\tests\Test-ConnectionMode.ps1"
 if ($env:OS -eq 'Windows_NT') {
     & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "$PSScriptRoot\Gui.ps1" -SmokeTest
     if ($LASTEXITCODE -ne 0) { throw 'GUI construction failed.' }

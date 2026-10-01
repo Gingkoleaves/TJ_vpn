@@ -1,4 +1,4 @@
-. "$PSScriptRoot\Common.ps1"
+﻿. "$PSScriptRoot\Common.ps1"
 
 function ConvertFrom-ClashResponse([byte[]]$Bytes) {
     $text = [Text.Encoding]::UTF8.GetString($Bytes)
@@ -69,15 +69,27 @@ function Invoke-ClashPipe([string]$PipeName, [string]$Method, [string]$Path, $Bo
 
 function Find-Mihomo([string]$ExplicitPath) {
     if ($ExplicitPath) {
-        if (-not (Test-Path -LiteralPath $ExplicitPath)) { throw 'Mihomo path does not exist.' }
+        if (-not (Test-Path -LiteralPath $ExplicitPath -PathType Leaf)) { throw 'Mihomo path does not exist or is not a file.' }
         return (Resolve-Path -LiteralPath $ExplicitPath).Path
     }
-    $verge = Get-Process -Name clash-verge -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($verge -and $verge.Path) {
-        $candidate = Join-Path (Split-Path $verge.Path -Parent) 'verge-mihomo.exe'
-        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    $candidates=@()
+    foreach ($process in @(Get-Process -Name mihomo,verge-mihomo,clash-verge -ErrorAction SilentlyContinue)) {
+        if ($process.Path) {
+            if ($process.ProcessName -ne 'clash-verge') { $candidates += $process.Path }
+            else { $candidates += Join-Path (Split-Path $process.Path -Parent) 'verge-mihomo.exe' }
+        }
     }
-    throw 'Could not locate Mihomo. Supply -MihomoPath <verge-mihomo.exe>.'
+    foreach ($name in @('mihomo.exe','verge-mihomo.exe')) {
+        $command=Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($command) { $candidates += $command.Source }
+        foreach ($root in @($env:LOCALAPPDATA,$env:ProgramFiles,${env:ProgramFiles(x86)})) {
+            if ($root) { $candidates += Join-Path $root "Clash Verge\$name" }
+        }
+    }
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return (Resolve-Path -LiteralPath $candidate).Path }
+    }
+    throw '未找到 mihomo 内核，请在 GUI 的代理设置中选择内核文件。'
 }
 
 function Assert-ClashHealth([string]$PipeName, [int]$Port) {
