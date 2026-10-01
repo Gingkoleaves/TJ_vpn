@@ -65,6 +65,7 @@ public static class CampusCredentialClient {
 }
 
 public sealed class CampusBackgroundProcess : IDisposable {
+    static readonly object startLock = new object();
     public readonly Process Process;
     readonly ConcurrentQueue<string> lines = new ConcurrentQueue<string>();
     string secret;
@@ -73,17 +74,42 @@ public sealed class CampusBackgroundProcess : IDisposable {
         Process = new Process();
         Process.StartInfo = new ProcessStartInfo(binary, arguments) {
             WorkingDirectory=Path.GetDirectoryName(binary), UseShellExecute=false, CreateNoWindow=true,
-            RedirectStandardInput=true, RedirectStandardOutput=true, RedirectStandardError=true
+            RedirectStandardInput=true, RedirectStandardOutput=true, RedirectStandardError=true,
+            StandardOutputEncoding=new UTF8Encoding(false), StandardErrorEncoding=new UTF8Encoding(false)
         };
         Process.OutputDataReceived += OnLine; Process.ErrorDataReceived += OnLine;
         try {
-            Process.Start(); Process.BeginOutputReadLine(); Process.BeginErrorReadLine();
+            StartWithoutInputPreamble(); Process.BeginOutputReadLine(); Process.BeginErrorReadLine();
             byte[] input = new UTF8Encoding(false).GetBytes(password + "\n");
             try { Process.StandardInput.BaseStream.Write(input, 0, input.Length); Process.StandardInput.BaseStream.Flush(); }
             finally { Array.Clear(input, 0, input.Length); Process.StandardInput.Close(); }
         } catch {
             try { if (!Process.HasExited) Process.Kill(); } catch { }
             Process.Dispose(); secret=null; throw;
+        }
+    }
+    void StartWithoutInputPreamble() {
+        lock (startLock) {
+            // Modern .NET supports an explicit stdin encoding. Windows PowerShell's
+            // .NET Framework instead creates an auto-flushing writer using Console.InputEncoding,
+            // which can write a BOM before we write our UTF-8 password bytes.
+            var inputEncodingProperty = typeof(ProcessStartInfo).GetProperty("StandardInputEncoding");
+            if (inputEncodingProperty != null) {
+                inputEncodingProperty.SetValue(Process.StartInfo, new UTF8Encoding(false), null);
+                Process.Start();
+                return;
+            }
+            var previousEncoding = Console.InputEncoding;
+            if (previousEncoding.GetPreamble().Length == 0) {
+                Process.Start();
+                return;
+            }
+            try {
+                Console.InputEncoding = new UTF8Encoding(false);
+                Process.Start();
+            } finally {
+                Console.InputEncoding = previousEncoding;
+            }
         }
     }
     void OnLine(object sender, DataReceivedEventArgs e) {

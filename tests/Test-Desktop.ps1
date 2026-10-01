@@ -74,9 +74,14 @@ try {
 $fixtureBinary=Join-Path $fixtureRoot ('background-fixture-'+[Guid]::NewGuid().ToString('N')+'.exe')
 Add-Type -Path "$PSScriptRoot\fixtures\BackgroundFixture.cs" -OutputAssembly $fixtureBinary -OutputType ConsoleApplication
 foreach ($iteration in 1..8) {
-    $syntheticPassword='synthetic-native-stdin-secret'
-    $runner=[CampusBackgroundProcess]::new($fixtureBinary,'',$syntheticPassword)
+    $syntheticPassword='synthetic-native-stdin-'+[char]0x79d8+[char]0x5bc6
+    $previousEncoding=[Console]::InputEncoding
+    $runner=$null
     try {
+        [Console]::InputEncoding=[Text.UTF8Encoding]::new(($iteration % 2) -eq 1)
+        $preambleLength=[Console]::InputEncoding.GetPreamble().Length
+        $runner=[CampusBackgroundProcess]::new($fixtureBinary,'',$syntheticPassword)
+        if ([Console]::InputEncoding.GetPreamble().Length -ne $preambleLength) { throw 'Background startup changed host input encoding.' }
         if (-not $runner.Process.WaitForExit(10000)) { $runner.Process.Kill(); throw 'Native fixture timed out.' }
         $runner.Process.WaitForExit()
         $captured=$runner.Drain() -join "`n"
@@ -86,6 +91,14 @@ foreach ($iteration in 1..8) {
             if (-not $captured.Contains($expected)) { throw "Native fixture missing $expected on iteration $iteration." }
         }
         $passed++
-    } finally { $runner.Dispose(); $syntheticPassword=$null }
+    } finally { if ($runner) { $runner.Dispose() }; [Console]::InputEncoding=$previousEncoding; $syntheticPassword=$null }
 }
+$previousEncoding=[Console]::InputEncoding
+try {
+    [Console]::InputEncoding=[Text.UTF8Encoding]::new($true)
+    $rejected=$false
+    try { [CampusBackgroundProcess]::new((Join-Path $fixtureRoot ('missing-'+[Guid]::NewGuid().ToString('N')+'.exe')),'','synthetic-secret') | Out-Null } catch { $rejected=$true }
+    if (-not $rejected -or [Console]::InputEncoding.GetPreamble().Length -ne 3) { throw 'Failed child startup did not restore host encoding.' }
+    $passed++
+} finally { [Console]::InputEncoding=$previousEncoding }
 Write-Host "$passed desktop checks passed. Only synthetic credentials were used; no campus login attempted."
