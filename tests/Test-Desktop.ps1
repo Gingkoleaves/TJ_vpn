@@ -55,14 +55,37 @@ try {
     $passed++
 } finally { $server.Dispose(); $secret=$null }
 $fixtureCode='$value=[Console]::ReadLine(); [Console]::WriteLine("echo:"+$value); [Console]::Error.WriteLine("Set-Cookie: fixture"); exit 0'
-$fixtureArgs='-NoProfile -Command '+(ConvertTo-NativeArgument $fixtureCode)
+$fixtureArgs='-NoProfile -EncodedCommand '+[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($fixtureCode))
 $syntheticPassword='synthetic-stdin-secret'
 $runner=[CampusBackgroundProcess]::new("$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe",$fixtureArgs,$syntheticPassword)
 try {
     if (-not $runner.Process.WaitForExit(10000)) { $runner.Process.Kill(); throw 'Synthetic background child did not exit.' }
     $runner.Process.WaitForExit()
     $captured=$runner.Drain() -join "`n"
-    if ($runner.Process.ExitCode -ne 0 -or $captured.Contains($syntheticPassword) -or $captured.Contains('Set-Cookie') -or -not $captured.Contains('echo:[hidden]')) { throw 'Background stdin/output isolation failed.' }
+    if ($runner.Process.ExitCode -ne 0) { throw "PowerShell fixture exited with code $($runner.Process.ExitCode)." }
+    if ($captured.Contains($syntheticPassword)) { throw 'Background output exposed synthetic stdin secret.' }
+    if ($captured.Contains('Set-Cookie')) { throw 'Background output exposed cookie header.' }
+    if (-not $captured.Contains('echo:[hidden]')) {
+        $safe=($captured -split "`n" | ForEach-Object { [CampusBackgroundProcess]::Redact($_,$syntheticPassword) }) -join '; '
+        throw "PowerShell fixture did not echo stdin; sanitized output: $safe"
+    }
     $passed++
 } finally { $runner.Dispose(); $syntheticPassword=$null }
+$fixtureBinary=Join-Path $fixtureRoot ('background-fixture-'+[Guid]::NewGuid().ToString('N')+'.exe')
+Add-Type -Path "$PSScriptRoot\fixtures\BackgroundFixture.cs" -OutputAssembly $fixtureBinary -OutputType ConsoleApplication
+foreach ($iteration in 1..8) {
+    $syntheticPassword='synthetic-native-stdin-secret'
+    $runner=[CampusBackgroundProcess]::new($fixtureBinary,'',$syntheticPassword)
+    try {
+        if (-not $runner.Process.WaitForExit(10000)) { $runner.Process.Kill(); throw 'Native fixture timed out.' }
+        $runner.Process.WaitForExit()
+        $captured=$runner.Drain() -join "`n"
+        if ($runner.Process.ExitCode -ne 0) { throw "Native fixture exited with code $($runner.Process.ExitCode)." }
+        if ($captured.Contains($syntheticPassword) -or $captured.Contains('Set-Cookie')) { throw 'Native fixture output was not redacted.' }
+        foreach ($expected in @('echo:[hidden]','stdout-tail','stderr-tail')) {
+            if (-not $captured.Contains($expected)) { throw "Native fixture missing $expected on iteration $iteration." }
+        }
+        $passed++
+    } finally { $runner.Dispose(); $syntheticPassword=$null }
+}
 Write-Host "$passed desktop checks passed. Only synthetic credentials were used; no campus login attempted."
