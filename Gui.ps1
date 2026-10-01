@@ -199,6 +199,10 @@ function Update-Panel {
                 }
                 if ($background.phase -eq 'error') { $script:statusLabel.Text='连接失败'; $script:detailLabel.Text=$background.message }
                 elseif ($background.phase -in @('auth','setup','connecting')) { $script:statusLabel.Text='后台连接中…'; $script:detailLabel.Text=$background.message }
+                elseif ($script:connected -and $background.phase -eq 'ready' -and $background.PSObject.Properties['unresolvedTargets'] -and @($background.unresolvedTargets).Count) {
+                    $script:statusLabel.Text='校园网已连接 · 部分域名未解析'
+                    $script:detailLabel.Text='未解析：'+(@($background.unresolvedTargets) -join ', ')+'。其他目标可继续使用，详见日志。'
+                }
             }
         }
         $busyWorker=$script:connectionWindow -and -not $script:connectionWindow.HasExited

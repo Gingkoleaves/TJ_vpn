@@ -120,9 +120,33 @@ fn overlay_settings(config: &Value, state: &Value) -> Result<Value> {
     if dns.is_empty() {
         return Err("No campus DNS".into());
     }
+    let mut resolved = serde_json::Map::new();
+    if let Some(domains) = state["domains"].as_array() {
+        for domain in domains {
+            let host = domain["hostName"]
+                .as_str()
+                .ok_or("Invalid resolved domain")?;
+            if !hosts.iter().any(|configured| configured == host) {
+                continue;
+            }
+            let addresses = domain["addresses"]
+                .as_array()
+                .ok_or("Invalid resolved addresses")?;
+            if addresses.is_empty() {
+                continue;
+            }
+            for address in addresses {
+                address
+                    .as_str()
+                    .ok_or("Invalid address")?
+                    .parse::<std::net::Ipv4Addr>()?;
+            }
+            resolved.insert(host.to_owned(), json!(addresses));
+        }
+    }
     Ok(
         json!({"name":name, "interface":interface, "gateway":gateway, "rules":rules,
-        "dns":dns, "suffixes":config["domainSuffixes"], "hosts":hosts}),
+        "dns":dns, "suffixes":config["domainSuffixes"], "hosts":hosts, "resolved":resolved}),
     )
 }
 
@@ -185,6 +209,16 @@ fn overlay(source: &Value, settings: &Value) -> Result<Value> {
     // Gateway must remain independent of the tunnel it creates.
     policy[settings["gateway"].as_str().unwrap()] = json!(["223.5.5.5", "119.29.29.29"]);
     dns["direct-nameserver-follow-policy"] = json!(true);
+    if let Some(resolved) = settings["resolved"]
+        .as_object()
+        .filter(|entries| !entries.is_empty())
+    {
+        dns["use-hosts"] = json!(true);
+        let host_map = object(&mut result, "hosts")?;
+        for (host, addresses) in resolved {
+            host_map[host] = addresses.clone();
+        }
+    }
     // Do not change TUN flags, selected proxy groups, ports or fallback rules.
     Ok(result)
 }
@@ -213,6 +247,10 @@ function main(config, profileName) {{
   for (const host of (s.hosts || [])) config.dns['nameserver-policy'][host] = s.dns;
   config.dns['nameserver-policy'][s.gateway] = ['223.5.5.5', '119.29.29.29'];
   config.dns['direct-nameserver-follow-policy'] = true;
+  if (Object.keys(s.resolved || {{}}).length) {{
+    config.hosts = {{...(config.hosts || {{}}), ...s.resolved}};
+    config.dns['use-hosts'] = true;
+  }}
   return config;
 }}
 "#
@@ -346,5 +384,27 @@ mod tests {
             invalid["hosts"] = json!([host]);
             assert!(overlay_settings(&invalid, &state).is_err());
         }
+    }
+    #[test]
+    fn fallback_answers_are_pinned_and_unresolved_domains_do_not_abort_overlay() {
+        let config = json!({"server":"https://vpn.tongji.cn","clashProxyName":"Tongji-Native",
+            "interfaceName":"TongjiVPN","domainSuffixes":[],"hosts":["working.tongji.edu.cn","missing.tongji.edu.cn"]});
+        let state = json!({"connected":true,"interfaceName":"TongjiVPN","addedRoutes":["192.0.2.10/32"],"dns":["202.120.190.208"],
+            "domains":[{"hostName":"working.tongji.edu.cn","addresses":["192.0.2.10"],"dnsSource":"public"},
+            {"hostName":"missing.tongji.edu.cn","addresses":[],"dnsSource":"unresolved"}]});
+        let settings = overlay_settings(&config, &state).unwrap();
+        let output = overlay(
+            &json!({"hosts":{"external.example":"1.1.1.1"},"rules":["MATCH,DIRECT"]}),
+            &settings,
+        )
+        .unwrap();
+        assert_eq!(
+            output["hosts"]["working.tongji.edu.cn"],
+            json!(["192.0.2.10"])
+        );
+        assert_eq!(output["hosts"]["external.example"], "1.1.1.1");
+        assert_eq!(output["dns"]["use-hosts"], true);
+        assert!(output["hosts"].get("missing.tongji.edu.cn").is_none());
+        assert!(script(&settings, "").unwrap().contains("...s.resolved"));
     }
 }

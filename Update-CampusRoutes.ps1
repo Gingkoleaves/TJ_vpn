@@ -1,5 +1,7 @@
-param([string]$ConfigPath = "$PSScriptRoot\config.local.json")
+param([string]$ConfigPath = "$PSScriptRoot\config.local.json", $DesktopContext)
 . "$PSScriptRoot\scripts\Common.ps1"
+. "$PSScriptRoot\scripts\TargetResolution.ps1"
+. "$PSScriptRoot\scripts\DesktopStatus.ps1"
 Assert-Administrator
 if (-not ('CampusDns' -as [type])) { Add-Type -Path "$PSScriptRoot\scripts\CampusDns.cs" }
 $config = Read-CampusConfig $ConfigPath
@@ -10,14 +12,21 @@ $adapter = Get-NetAdapter -InterfaceIndex $state.interfaceIndex
 if ($adapter.Name -ne $config.interfaceName -or $adapter.Status -ne 'Up') { throw 'Native campus interface is not up.' }
 $newDomains = @()
 foreach ($hostName in $config.hosts) {
-    $answers = @()
-    foreach ($dnsServer in $state.dns) {
-        try {
-            $answers = @([CampusDns]::Resolve($hostName,$dnsServer,$state.address))
-            if ($answers.Count) { break }
-        } catch { Write-Warning "Could not resolve $hostName with campus DNS $dnsServer" }
+    $resolved=Resolve-CampusTarget $hostName $state $config
+    $answers=@($resolved.addresses)
+    $newDomains += $resolved
+    if (-not $answers.Count) {
+        $message="Unresolved target ${hostName}; other campus targets remain enabled. $($resolved.error)"
+        Write-Warning $message
+        if ($DesktopContext) { Write-DesktopStatus $DesktopContext 'connecting' 'Continuing with available campus targets' @($message) }
+        continue
     }
-    if (-not $answers.Count) { throw "Required campus host could not be resolved: $hostName" }
+    if ($DesktopContext) { Write-DesktopStatus $DesktopContext 'connecting' 'Resolving campus targets' @("${hostName}: $($answers -join ', ') [$($resolved.dnsSource) DNS]") }
+    if ($resolved.dnsSource -eq 'reference-pdf') {
+        $message="${hostName}: using documented HPC fallback addresses (SSH port 10022); live DNS did not succeed. $($resolved.error)"
+        Write-Warning $message
+        if ($DesktopContext) { Write-DesktopStatus $DesktopContext 'connecting' 'Using documented HPC address fallback' @($message) }
+    }
     foreach ($ip in $answers) {
         $prefix = "$ip/32"
         Assert-CampusPrefix $prefix
@@ -27,8 +36,11 @@ foreach ($hostName in $config.hosts) {
             Save-CampusState $state $statePath
         }
     }
-    $newDomains += [pscustomobject]@{hostName=$hostName;addresses=$answers}
+    Select-CampusReachableNodes $resolved $state.address
 }
 $state.domains = $newDomains
+if ($DesktopContext) {
+    $DesktopContext.State | Add-Member -NotePropertyName unresolvedTargets -NotePropertyValue @($newDomains | Where-Object { -not $_.addresses.Count } | ForEach-Object hostName) -Force
+}
 Save-CampusState $state $statePath
 Write-Host 'Campus DNS and configured host routes ready.'

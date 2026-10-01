@@ -18,9 +18,10 @@ Save-CampusState $fixtureConfig $fixturePath
 $normalized=Read-CampusConfig $fixturePath
 if ($normalized.routes[0] -ne '192.0.2.10/32' -or $normalized.hosts[0] -ne 'node.campus.example' -or $normalized.hosts.Count -ne 1) { throw 'targets did not override legacy fields.' }; $passed++
 $fixtureConfig.PSObject.Properties.Remove('targets')
+$fixtureConfig.hosts=@('node.campus.example')
 Save-CampusState $fixtureConfig $fixturePath
 $legacy=Read-CampusConfig $fixturePath
-if ($legacy.hosts[0] -ne 'software.tongji.edu.cn') { throw 'Legacy host configuration was not retained.' }; $passed++
+if ($legacy.hosts[0] -ne 'node.campus.example') { throw 'Legacy host configuration was not retained.' }; $passed++
 $ips=@(ConvertFrom-CampusHostList "192.0.2.10`n192.0.2.11,192.0.2.10")
 if ($ips.Count -ne 2 -or $ips[0] -ne '192.0.2.10') { throw 'Host list deduplication failed.' }
 $passed++

@@ -88,7 +88,7 @@ try {
             $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($state.error) { throw "Campus route setup failed: $($state.error)" }
             if ($state.connected -and $state.connectedAt -ne $lastReady) {
-                & "$PSScriptRoot\Update-CampusRoutes.ps1" -ConfigPath $ConfigPath
+                & "$PSScriptRoot\Update-CampusRoutes.ps1" -ConfigPath $ConfigPath -DesktopContext $DesktopContext
                 if (-not $NoClash) {
                     & "$PSScriptRoot\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath
                     $clashApplied = $true

@@ -5,6 +5,12 @@
 /bin/
 /dist/
 /config.local.json
+/config.local.json.previous
+/config.local.json.*.tmp
 /TongjiVPN.exe
 *.log
 *.zip
+
+/config.hosts.local.json
+/config.hosts.local.json.*
+/resources/
