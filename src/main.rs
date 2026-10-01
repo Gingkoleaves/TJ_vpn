@@ -52,6 +52,32 @@ fn overlay_settings(config: &Value, state: &Value) -> Result<Value> {
         format!("DOMAIN,{gateway},DIRECT"),
         "PROCESS-NAME,openconnect.exe,DIRECT".into(),
     ];
+    let mut hosts = Vec::new();
+    if let Some(values) = config.get("hosts") {
+        for value in values.as_array().ok_or("hosts must be a list")? {
+            let host = value
+                .as_str()
+                .ok_or("Invalid campus host")?
+                .to_ascii_lowercase();
+            if host.len() > 253
+                || !host.contains('.')
+                || host == gateway
+                || host.split('.').any(|label| {
+                    label.is_empty()
+                        || label.len() > 63
+                        || !label
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                        || !label.as_bytes()[0].is_ascii_alphanumeric()
+                        || !label.as_bytes()[label.len() - 1].is_ascii_alphanumeric()
+                })
+            {
+                return Err("Invalid campus host or gateway loop".into());
+            }
+            rules.push(format!("DOMAIN,{host},{name}"));
+            hosts.push(host);
+        }
+    }
     for prefix in state["addedRoutes"]
         .as_array()
         .ok_or("Missing addedRoutes")?
@@ -96,7 +122,7 @@ fn overlay_settings(config: &Value, state: &Value) -> Result<Value> {
     }
     Ok(
         json!({"name":name, "interface":interface, "gateway":gateway, "rules":rules,
-        "dns":dns, "suffixes":config["domainSuffixes"]}),
+        "dns":dns, "suffixes":config["domainSuffixes"], "hosts":hosts}),
     )
 }
 
@@ -151,6 +177,11 @@ fn overlay(source: &Value, settings: &Value) -> Result<Value> {
     for suffix in settings["suffixes"].as_array().ok_or("Invalid suffixes")? {
         policy[format!("+.{}", suffix.as_str().unwrap())] = settings["dns"].clone();
     }
+    if let Some(hosts) = settings["hosts"].as_array() {
+        for host in hosts {
+            policy[host.as_str().ok_or("Invalid host")?] = settings["dns"].clone();
+        }
+    }
     // Gateway must remain independent of the tunnel it creates.
     policy[settings["gateway"].as_str().unwrap()] = json!(["223.5.5.5", "119.29.29.29"]);
     dns["direct-nameserver-follow-policy"] = json!(true);
@@ -179,6 +210,7 @@ function main(config, profileName) {{
   config.dns = config.dns || {{}};
   config.dns['nameserver-policy'] = config.dns['nameserver-policy'] || {{}};
   for (const suffix of s.suffixes) config.dns['nameserver-policy']['+.' + suffix] = s.dns;
+  for (const host of (s.hosts || [])) config.dns['nameserver-policy'][host] = s.dns;
   config.dns['nameserver-policy'][s.gateway] = ['223.5.5.5', '119.29.29.29'];
   config.dns['direct-nameserver-follow-policy'] = true;
   return config;
@@ -282,5 +314,37 @@ mod tests {
             "202.120.190.208#Tongji-Native"
         );
         assert_eq!(output["rules"][0], "DOMAIN,vpn.tongji.cn,DIRECT");
+    }
+    #[test]
+    fn explicit_domains_get_exact_rules_and_campus_dns_without_suffix_dependency() {
+        let config = json!({"server":"https://vpn.tongji.cn","clashProxyName":"Tongji-Native",
+            "interfaceName":"TongjiVPN","domainSuffixes":[],"hosts":["node.campus.example","node.department.internal"]});
+        let state = json!({"connected":true,"interfaceName":"TongjiVPN","addedRoutes":["192.0.2.10/32"],"dns":["202.120.190.208"]});
+        let settings = overlay_settings(&config, &state).unwrap();
+        let output = overlay(&json!({"rules":["MATCH,DIRECT"]}), &settings).unwrap();
+        assert!(
+            output["rules"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("DOMAIN,node.campus.example,Tongji-Native"))
+        );
+        assert_eq!(
+            output["dns"]["nameserver-policy"]["node.department.internal"][0],
+            "202.120.190.208#Tongji-Native"
+        );
+        assert!(
+            script(&settings, "function main(c) { return c; }")
+                .unwrap()
+                .contains("for (const host of (s.hosts || []))")
+        );
+        for host in [
+            "bad.example,MATCH,DIRECT",
+            "vpn.tongji.cn",
+            "bad..tongji.cn",
+        ] {
+            let mut invalid = config.clone();
+            invalid["hosts"] = json!([host]);
+            assert!(overlay_settings(&invalid, &state).is_err());
+        }
     }
 }

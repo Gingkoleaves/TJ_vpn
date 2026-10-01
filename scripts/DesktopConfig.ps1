@@ -17,17 +17,17 @@ function Show-CampusHostEditor($Owner, [string]$ConfigPath, [switch]$SmokeTest) 
     }
     $config=Read-CampusConfig $ConfigPath
     $dialog=[Windows.Forms.Form]::new()
-    $dialog.Text='校园主机 IP'; $dialog.Size=[Drawing.Size]::new(460,420)
+    $dialog.Text='校园访问目标'; $dialog.Size=[Drawing.Size]::new(460,420)
     $dialog.StartPosition='CenterParent'; $dialog.FormBorderStyle='FixedDialog'
     $dialog.MaximizeBox=$false; $dialog.MinimizeBox=$false; $dialog.Font=$Owner.Font
     $label=[Windows.Forms.Label]::new()
-    $label.Text='每行一个校内主机 IPv4 地址，保存后重新连接生效。'
+    $label.Text='每行一个 IP 或域名，例如 node.campus.example。保存后重新连接生效。'
     $label.Location=[Drawing.Point]::new(20,18); $label.Size=[Drawing.Size]::new(410,45)
     $dialog.Controls.Add($label)
     $hostListBox=[Windows.Forms.TextBox]::new()
     $hostListBox.Multiline=$true; $hostListBox.ScrollBars='Vertical'; $hostListBox.AcceptsReturn=$true
     $hostListBox.Location=[Drawing.Point]::new(20,68); $hostListBox.Size=[Drawing.Size]::new(400,205)
-    $hostListBox.Text=(@($config.routes | ForEach-Object { ($_ -split '/')[0] }) -join "`r`n")
+    $hostListBox.Text=(@(@($config.routes | ForEach-Object { ($_ -split '/')[0] }) + @($config.hosts) | Select-Object -Unique) -join "`r`n")
     $dialog.Controls.Add($hostListBox)
     $errorLabel=[Windows.Forms.Label]::new()
     $errorLabel.ForeColor=[Drawing.Color]::Firebrick
@@ -38,15 +38,18 @@ function Show-CampusHostEditor($Owner, [string]$ConfigPath, [switch]$SmokeTest) 
     $cancel.DialogResult='Cancel'; $dialog.CancelButton=$cancel
     $save.Add_Click({
         try {
-            $ips=@(ConvertFrom-CampusHostList $hostListBox.Text)
-            $config.routes=@($ips | ForEach-Object { "$_/32" })
+            $parsed=Split-CampusTargets ($hostListBox.Text -replace '[，；]',',')
+            if ($parsed.Domains -contains ([Uri]$config.server).Host) { throw 'VPN gateway cannot be configured as a campus target.' }
+            $config.routes=@($parsed.IPs | ForEach-Object { "$_/32" })
+            $config.hosts=@($parsed.Domains)
+            $config | Add-Member -NotePropertyName targets -NotePropertyValue @($parsed.Targets) -Force
             Save-CampusState $config $ConfigPath
             $dialog.DialogResult='OK'; $dialog.Close()
         } catch { $errorLabel.Text=$_.Exception.Message }
     })
     $dialog.Controls.Add($save); $dialog.Controls.Add($cancel)
     if ($SmokeTest) {
-        $dialog.Add_Shown({ $hostListBox.Text="192.0.2.10`r`n192.0.2.11"; $save.PerformClick(); if ($dialog.Visible) { $dialog.Close() } })
+        $dialog.Add_Shown({ $hostListBox.Text="192.0.2.10`r`n192.0.2.11`r`nnode.campus.example"; $save.PerformClick(); if ($dialog.Visible) { $dialog.Close() } })
     }
     try { return $dialog.ShowDialog($Owner) } finally { $dialog.Dispose() }
 }

@@ -1,6 +1,7 @@
 {
   "server": "https://vpn.tongji.cn",
   "interfaceName": "TongjiVPN",
+  "targets": ["192.0.2.10", "software.tongji.edu.cn"],
   "routes": ["192.0.2.10/32"],
   "hosts": ["software.tongji.edu.cn"],
   "domainSuffixes": ["tongji.edu.cn", "tongji.cn"],

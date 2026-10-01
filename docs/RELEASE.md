@@ -1,11 +1,13 @@
-# 0.3.0-preview.2 发布说明
+# 0.3.0-preview.3 发布说明
 
 - 主界面仅保留连接、断开、配置、日志四个按钮。
+- 配置支持 IP 与域名混合输入（如 node.campus.example），统一 targets 列表并兼容旧 routes/hosts。
+- 域名解析直接绑定校园网卡，支持 DNS TCP/UDP 和 CNAME，生成精确 Clash 域名规则及 DNS 策略。
 - 修复后台状态变量跨 PowerShell 脚本作用域丢失；状态对象改为显式参数传递，增加 2 项跨脚本回归检查。
 - 新增 GUI 账号/密码输入，管理员连接 shell 在后台运行。
 - 本机命名管道使用当前用户 ACL，并核对双方进程 ID；密码不写文件或命令行，交接后清空密码框。
 - OpenConnect 从标准输入读取密码，Array `form:method` 明确留空；非交互模式不等待终端输入。
-- 配置窗口只维护用户指定的校内 IPv4 主机列表，自动生成 /32 路由并去重，保留隐藏的内部参数。
+- 配置窗口只维护用户指定的 IP / 域名列表，自动生成 /32 路由并去重，保留隐藏的内部参数。
 - 连接输出经过密码/cookie 脱敏后在面板显示。
 
 使用：Windows x64、Clash Verge Rev 规则模式与 TUN、7-Zip、校园账号和首次下载网络。解压整个 ZIP，运行 TongjiVPN.exe。发布包不包含 OpenConnect，首次从官方项目下载固定版本并校验。

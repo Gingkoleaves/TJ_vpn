@@ -130,7 +130,7 @@ $disconnect=Add-Button '断开' 212 332 170 {
 $edit=Add-Button '配置' 398 332 170 {
     Invoke-Safely {
         $path=Join-Path $PSScriptRoot 'config.local.json'
-        if ((Show-CampusHostEditor $form $path) -eq 'OK') { Add-Log '校园主机 IP 已保存，下次连接生效。' }
+        if ((Show-CampusHostEditor $form $path) -eq 'OK') { Add-Log '校园 IP / 域名已保存，下次连接生效。' }
     }
 }
 $logs=Add-Button '日志' 584 332 170 { Invoke-Safely { $script:logBox.Focus(); $script:logBox.SelectionStart=$script:logBox.TextLength; $script:logBox.ScrollToCaret() } }
@@ -239,7 +239,7 @@ try {
         Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination $configFixture
         $editorResult=Show-CampusHostEditor $form $configFixture -SmokeTest
         $edited=Read-CampusConfig $configFixture
-        if ($editorResult -ne 'OK' -or $edited.routes.Count -ne 2 -or $edited.routes[1] -ne '192.0.2.11/32') { throw 'Host configuration dialog save failed.' }
+        if ($editorResult -ne 'OK' -or $edited.routes.Count -ne 2 -or $edited.routes[1] -ne '192.0.2.11/32' -or $edited.hosts[0] -ne 'node.campus.example') { throw 'Mixed target configuration dialog save failed.' }
         Write-Host 'GUI construction smoke test passed. No network action performed.'
     } else {
         $timer.Start()

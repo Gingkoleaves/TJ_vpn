@@ -3,6 +3,13 @@ $ErrorActionPreference = 'Stop'
 
 function Read-CampusConfig([string]$Path) {
     $config = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($config.PSObject.Properties['targets']) {
+        if ($config.targets -is [string] -or $null -eq $config.targets) { throw 'targets must be a list of IP addresses or domain names.' }
+        $parsed=Split-CampusTargets (@($config.targets) -join "`n")
+        $config | Add-Member -NotePropertyName routes -NotePropertyValue @($parsed.IPs | ForEach-Object { "$_/32" }) -Force
+        $config | Add-Member -NotePropertyName hosts -NotePropertyValue @($parsed.Domains) -Force
+        $config.targets=@($parsed.Targets)
+    }
     $uri = [Uri]$config.server
     if ($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -ne '/') {
         throw 'server must be an HTTPS origin without credentials, query or path.'
@@ -11,9 +18,34 @@ function Read-CampusConfig([string]$Path) {
     if ($config.clashProxyName -notmatch '^[A-Za-z][A-Za-z0-9_-]{0,40}$') { throw 'Invalid clashProxyName.' }
     foreach ($prefix in $config.routes) { Assert-CampusPrefix $prefix }
     foreach ($hostName in @($config.hosts) + @($config.domainSuffixes)) {
-        if ($hostName -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$') { throw "Invalid domain: $hostName" }
+        Assert-CampusDomain $hostName
     }
+    if (@($config.hosts) -contains $uri.Host) { throw 'VPN gateway cannot be configured as a campus target.' }
     return $config
+}
+
+function Assert-CampusDomain([string]$Domain) {
+    if ($Domain.Length -gt 253 -or $Domain -notmatch '^(?=.+\.[A-Za-z])[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$') { throw "Invalid campus domain: $Domain" }
+    foreach ($label in $Domain.Split('.')) { if ($label.Length -gt 63) { throw "Domain label too long: $Domain" } }
+}
+
+function Split-CampusTargets([string]$Text) {
+    $ips=@(); $domains=@(); $targets=@()
+    foreach ($raw in @($Text -split '[\s,;]+' | Where-Object { $_ })) {
+        $entry=$raw.ToLowerInvariant()
+        if ($entry -match '^\d+(\.\d+){3}$') {
+            $ip=$null
+            if (-not [Net.IPAddress]::TryParse($entry,[ref]$ip) -or $ip.ToString() -ne $entry) { throw "Invalid campus IPv4 address: $entry" }
+            Assert-CampusPrefix "$entry/32"
+            $ips += $entry
+        } else {
+            $entry=$entry.TrimEnd('.')
+            Assert-CampusDomain $entry
+            $domains += $entry
+        }
+        $targets += $entry
+    }
+    return [pscustomobject]@{IPs=@($ips | Select-Object -Unique);Domains=@($domains | Select-Object -Unique);Targets=@($targets | Select-Object -Unique)}
 }
 
 function Assert-CampusPrefix([string]$Prefix) {

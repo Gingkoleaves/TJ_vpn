@@ -6,9 +6,14 @@
 
 ## 快速开始
 
-使用 `dist/tongji-openconnect-0.3.0-preview.2-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**。面板使用普通权限，连接时请求管理员权限，后台 shell 不显示。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
+使用 `dist/tongji-openconnect-0.3.0-preview.3-windows-x64.zip`，可不安装 Rust。安装好 7-Zip 后解压整个 ZIP，双击 **TongjiVPN.exe**。面板使用普通权限，连接时请求管理员权限，后台 shell 不显示。再次运行会唤起已有窗口。`StartGUI.cmd` 是备用入口；不要把 exe 单独移走，也不要在 ZIP 内直接运行。
 
-1. **配置**：填写校内主机 IP，每行一个；只展示 IP，不展示 VPN、DNS 或 Clash 参数。
+1. **配置**：填写校内主机 IP 或域名，每行一个；不展示 VPN、DNS 或 Clash 参数。例如：
+
+   ```text
+   192.0.2.10
+   node.campus.example
+   ```
 2. 在主界面输入校园账号和密码，点击 **连接**，允许 UAC。首次连接会自动准备客户端，authgroup 自动填空，不需要管理员终端输入。
 3. **日志**：查看下方连接进度及错误。校园网卡已连接表示配置就绪；可以用 SSH 或下述命令检查实际可达性。
 4. **断开**：请求后台程序退出，清理校园路由并恢复 Clash。已建立连接后关闭面板，连接继续运行。
@@ -66,9 +71,17 @@ Setup 创建 `config.local.json`；它不会被 Git 跟踪。默认校园目标�
 - `software.tongji.edu.cn`：由校园 DNS 查询真实 IPv4，再添加精确 /32 路由。
 - 校园 DNS：取自登录后学校实际下发的服务器。
 
-GUI 配置只接受明确的 IPv4 主机地址，自动去重并生成 /32 路由；拒绝默认地址、fake-IP、回环、组播、域名及 CIDR 网段。修改后重连生效。源码高级用户仍可直接修改 `config.local.json`；GUI 保存会把 `routes` 替换为主机列表，其他内部配置保持原样。
+GUI 配置接受 IPv4 主机地址或完整域名，自动去重、规范域名大小写；不接受 URL、端口、通配符或 CIDR 网段。修改后重连生效。保存为统一 `targets` 列表，同时生成内部 `routes` / `hosts`；兼容没有 `targets` 的旧配置。若存在 `targets`，它是目标列表的唯一来源。
 
-**当前提供指定目标的分流，并非学校全网自动发现。** `domainSuffixes` 决定 Clash 的校园规则和 DNS 策略，但域名对应的目标仍需列入 `hosts` 或由 `routes` 覆盖。第三方图书馆数据库、IPv6、其他学校、多因素/浏览器认证没有验证。
+源码高级用户也可修改 JSON：
+
+```json
+"targets": ["192.0.2.10", "node.campus.example"]
+```
+
+连接时，程序绑定校园网卡直接向学校 DNS 查询域名（TCP，必要时回退 UDP），把返回的 IPv4 加入专用路由；Clash 增加精确 DOMAIN 规则和校园 DNS 策略。无需修改 Windows hosts 文件或全局 DNS。域名仅在连接/重连时解析；若学校改变 IP，需要重连刷新。域名没有 IPv4 或学校 DNS 无法解析时，连接会报告该目标错误。
+
+**当前提供指定目标的分流，并非学校全网自动发现。** 在配置中添加域名，会自动进入校园域名规则和 DNS 策略，不需要手动编辑后缀。网页若重定向到其他校内域名，应把跳转目标也加入列表。第三方图书馆数据库、IPv6、其他学校、多因素/浏览器认证没有验证。
 
 服务器、网卡名、Clash 端口和命名管道都可配置。默认 Clash Verge Rev 路径按当前用户 APPDATA 自动定位；自定义路径可用：
 

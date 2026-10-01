@@ -2,6 +2,25 @@
 . "$PSScriptRoot\..\scripts\DesktopConfig.ps1"
 if (-not ('CampusCredentialServer' -as [type])) { Add-Type -Path "$PSScriptRoot\..\scripts\DesktopBridge.cs" }
 $passed=0
+$mixed=Split-CampusTargets "192.0.2.10`nNODE.CAMPUS.EXAMPLE`nnode.campus.example."
+if ($mixed.IPs.Count -ne 1 -or $mixed.Domains.Count -ne 1 -or $mixed.Domains[0] -ne 'node.campus.example' -or $mixed.Targets.Count -ne 2) { throw 'Mixed target normalization failed.' }; $passed++
+foreach ($bad in @('https://node.campus.example','bad..tongji.cn','*.tongji.cn','node.campus.example:22','-bad.tongji.cn')) {
+    $rejected=$false
+    try { Split-CampusTargets $bad | Out-Null } catch { $rejected=$true }
+    if (-not $rejected) { throw 'Malformed domain accepted.' }; $passed++
+}
+$fixtureRoot=Join-Path $PSScriptRoot '..\runtime\tests'
+New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+$fixtureConfig=Get-Content -LiteralPath "$PSScriptRoot\..\config.example.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$fixtureConfig.targets=@('192.0.2.10','node.campus.example')
+$fixturePath=Join-Path $fixtureRoot 'mixed-targets.json'
+Save-CampusState $fixtureConfig $fixturePath
+$normalized=Read-CampusConfig $fixturePath
+if ($normalized.routes[0] -ne '192.0.2.10/32' -or $normalized.hosts[0] -ne 'node.campus.example' -or $normalized.hosts.Count -ne 1) { throw 'targets did not override legacy fields.' }; $passed++
+$fixtureConfig.PSObject.Properties.Remove('targets')
+Save-CampusState $fixtureConfig $fixturePath
+$legacy=Read-CampusConfig $fixturePath
+if ($legacy.hosts[0] -ne 'software.tongji.edu.cn') { throw 'Legacy host configuration was not retained.' }; $passed++
 $ips=@(ConvertFrom-CampusHostList "192.0.2.10`n192.0.2.11,192.0.2.10")
 if ($ips.Count -ne 2 -or $ips[0] -ne '192.0.2.10') { throw 'Host list deduplication failed.' }
 $passed++

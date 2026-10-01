@@ -1,6 +1,7 @@
 param([string]$ConfigPath = "$PSScriptRoot\config.local.json")
 . "$PSScriptRoot\scripts\Common.ps1"
 Assert-Administrator
+if (-not ('CampusDns' -as [type])) { Add-Type -Path "$PSScriptRoot\scripts\CampusDns.cs" }
 $config = Read-CampusConfig $ConfigPath
 $statePath = "$PSScriptRoot\runtime\state.json"
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -12,8 +13,7 @@ foreach ($hostName in $config.hosts) {
     $answers = @()
     foreach ($dnsServer in $state.dns) {
         try {
-            $answers = @(Resolve-DnsName -Name $hostName -Server $dnsServer -Type A -DnsOnly -QuickTimeout -ErrorAction Stop |
-                Where-Object { $_.Type -eq 'A' } | Select-Object -ExpandProperty IPAddress -Unique)
+            $answers = @([CampusDns]::Resolve($hostName,$dnsServer,$state.address))
             if ($answers.Count) { break }
         } catch { Write-Warning "Could not resolve $hostName with campus DNS $dnsServer" }
     }
