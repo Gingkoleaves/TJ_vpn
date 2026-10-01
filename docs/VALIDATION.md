@@ -4,6 +4,8 @@
 
 ## 本轮已完成
 
+再次登录实测：认证成功，但 OpenConnect 在打开旧名 `TongjiVPN` 时返回 0x490，未到达 connect hook。检查时没有可见校园网卡或 OpenConnect 进程；残留记录为推断原因。现改为每次连接生成唯一网卡名称，未删除网卡或卸载驱动。已增加会话名唯一性/长度检查，真实重连仍待验证。
+
 用户原生登录实测：Array 认证成功，Windows 创建 `TongjiVPN`（接口描述 `OpenConnect Tunnel`）。旧版本 hook 因描述匹配错误而退出，尚未完成校园路由。已修复描述识别并加入 4 项回归检查：当前 21 项安全检查、6 项 HTTP 检查、5 项 Rust 检查通过。无校园通路时采样能完整输出校园超时及外网 HTTP 200，不再被 PowerShell NativeCommandError 中断。实际路由及校园访问仍待重新连接验证。
 
 发布验证补充：HTTP 管道解析的 6 项检查通过（包括中文 UTF-8 分块响应）；已只读获取当前 Clash 的手选代理组，未退出或重启 Clash。

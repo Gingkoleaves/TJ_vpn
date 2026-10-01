@@ -47,6 +47,11 @@ function Test-CampusAdapter($Adapter, [string]$ExpectedName) {
         ($Adapter.InterfaceDescription -eq 'OpenConnect Tunnel' -or $Adapter.InterfaceDescription -like '*Wintun*'))
 }
 
+function New-CampusInterfaceName([string]$BaseName) {
+    if ($BaseName -notmatch '^[A-Za-z][A-Za-z0-9_-]{0,30}$') { throw 'Invalid interface name prefix.' }
+    return $BaseName.Substring(0, [Math]::Min(22, $BaseName.Length)) + '_' + [Guid]::NewGuid().ToString('N').Substring(0,8)
+}
+
 function Save-CampusState($State, [string]$Path) {
     $temporary = "$Path.$PID.tmp"
     [IO.File]::WriteAllText($temporary, ($State | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))

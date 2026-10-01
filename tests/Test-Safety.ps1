@@ -1,5 +1,10 @@
 . "$PSScriptRoot\..\scripts\Common.ps1"
 $passed = 0
+$firstName = New-CampusInterfaceName 'TongjiVPN'
+$secondName = New-CampusInterfaceName 'TongjiVPN'
+if ($firstName -eq $secondName -or $firstName -notmatch '^TongjiVPN_[a-f0-9]{8}$') { throw 'Session names were reused or malformed.' }
+if ((New-CampusInterfaceName ('T' * 31)).Length -gt 31) { throw 'Session name exceeded Windows limit.' }
+$passed += 2
 foreach ($description in @('OpenConnect Tunnel', 'Wintun Userspace Tunnel')) {
     if (-not (Test-CampusAdapter ([pscustomobject]@{Name='TongjiVPN';InterfaceDescription=$description}) 'TongjiVPN')) { throw 'Expected campus driver refused.' }
     $passed++

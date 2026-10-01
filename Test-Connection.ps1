@@ -9,8 +9,8 @@ for ($sample = 1; $sample -le $Count; $sample++) {
     $campusReady = $false
     if (Test-Path -LiteralPath $statePath) {
         $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $adapter = Get-NetAdapter -Name $config.interfaceName -ErrorAction SilentlyContinue
-        $campusReady = $state.connected -and $adapter -and $adapter.Status -eq 'Up'
+        $adapter = Get-NetAdapter -InterfaceIndex $state.interfaceIndex -ErrorAction SilentlyContinue
+        $campusReady = $state.connected -and (Test-CampusAdapter $adapter $state.interfaceName) -and $adapter.Status -eq 'Up'
     }
     foreach ($test in @(@{name='campus';url='https://software.tongji.edu.cn'}, @{name='external';url='https://www.google.com'})) {
         $errorFile = "$PSScriptRoot\runtime\curl-error.txt"

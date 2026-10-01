@@ -85,6 +85,8 @@ Windows SSH ── 校园目标专用路由 ── TongjiVPN ── 校内服务
 
 ## 恢复与可靠性设计
 
+每次连接的网卡名带随机后缀（例如 `TongjiVPN_a1b2c3d4`），实际名称以 Status 输出为准；`interfaceName` 配置现在用作名称前缀。这用于绕过 OpenConnect 对残留同名 Wintun 记录的打开失败，不重置其他网络适配器。会话配置仅写入忽略跟踪的 `runtime/session-config.json`。
+
 - 独占锁防止启动多个本仓库连接；OpenConnect 内置重连，默认超时由上游决定。
 - 原子写入状态文件；只记录接口/路由，不记录密码、cookie、完整环境变量或 HTTP 认证流量。
 - Windows hook 有 10 秒上游时限；DNS 和 Clash 工作移到父进程执行。
