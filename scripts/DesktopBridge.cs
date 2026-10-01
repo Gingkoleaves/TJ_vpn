@@ -96,6 +96,7 @@ public sealed class CampusBackgroundProcess : IDisposable {
         return String.IsNullOrEmpty(password) ? line : line.Replace(password, "[hidden]");
     }
     public string[] Drain() {
+        if (Process.HasExited) Process.WaitForExit();
         var result=new System.Collections.Generic.List<string>(); string line;
         while (lines.TryDequeue(out line)) result.Add(line);
         return result.ToArray();
