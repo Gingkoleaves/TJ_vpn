@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$ConfigPath = "$PSScriptRoot\config.local.json",
+    [string]$ConfigPath = "$PSScriptRoot\..\config.local.json",
     [string]$UserName,
     [string]$ClashDirectory = "$env:APPDATA\io.github.clash-verge-rev.clash-verge-rev",
     [string]$MihomoPath,
@@ -9,13 +9,14 @@
     [pscredential]$Credential,
     $DesktopContext
 )
-. "$PSScriptRoot\scripts\Clash.ps1"
-. "$PSScriptRoot\scripts\DesktopStatus.ps1"
-. "$PSScriptRoot\scripts\DirectDns.ps1"
-. "$PSScriptRoot\scripts\ConnectionMode.ps1"
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Clash.ps1"
+. "$ProjectRoot\scripts\DesktopStatus.ps1"
+. "$ProjectRoot\scripts\DirectDns.ps1"
+. "$ProjectRoot\scripts\ConnectionMode.ps1"
 if ($Credential -and -not $DesktopContext) { throw 'Background credentials require an explicit desktop status context.' }
 Assert-Administrator
-if (-not (Test-Path -LiteralPath $ConfigPath)) { Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination $ConfigPath }
+if (-not (Test-Path -LiteralPath $ConfigPath)) { Copy-Item -LiteralPath "$ProjectRoot\config\config.example.json" -Destination $ConfigPath }
 $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath).Path
 $config = Read-CampusConfig $ConfigPath
 if ($ClashPipe) { $config.clashPipe=$ClashPipe }
@@ -25,17 +26,17 @@ if ($NoClash -and (Get-ProxyPresence $config.clashPipe $config.clashProxyPort)) 
 if (-not $NoClash) {
     Assert-ClashHealth $config.clashPipe $config.clashProxyPort
     $MihomoPath = Find-Mihomo $MihomoPath
-    if (-not (Test-Path -LiteralPath "$PSScriptRoot\bin\campus-config.exe") -and
-        -not (Test-Path -LiteralPath "$PSScriptRoot\target\release\campus-config.exe")) { throw 'Run Build.ps1 or use a packaged release.' }
+    if (-not (Test-Path -LiteralPath "$ProjectRoot\bin\campus-config.exe") -and
+        -not (Test-Path -LiteralPath "$ProjectRoot\target\release\campus-config.exe")) { throw 'Run tools\Build.ps1 or use a packaged release.' }
 }
-$binary = "$PSScriptRoot\vendor\openconnect\openconnect.exe"
-if (-not (Test-Path -LiteralPath $binary)) { throw 'Run Setup.ps1 first.' }
+$binary = "$ProjectRoot\vendor\openconnect\openconnect.exe"
+if (-not (Test-Path -LiteralPath $binary)) { throw 'Run app\Setup.ps1 first.' }
 $savedPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 $version = & $binary --version 2>&1 | Out-String
 $ErrorActionPreference = $savedPreference
 if ($version -notmatch 'Supported protocols:.*array') { throw 'This OpenConnect build does not support Array.' }
-$runtime = "$PSScriptRoot\runtime"
+$runtime = "$ProjectRoot\runtime"
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 $lockPath = Join-Path $runtime 'connection.lock'
 $lockHandle = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
@@ -50,7 +51,7 @@ $ConfigPath = Join-Path $runtime 'session-config.json'
 Save-CampusState $config $ConfigPath
 $oldConfigEnv = $env:CAMPUS_CONFIG_PATH
 $env:CAMPUS_CONFIG_PATH = $ConfigPath
-$hook = "$PSScriptRoot\scripts\vpnc-hook.js"
+$hook = "$ProjectRoot\scripts\vpnc-hook.js"
 $arguments = @('--protocol=array', '--no-dtls', '--disable-ipv6', '--interface', $config.interfaceName, '--script', $hook)
 if ($Credential) {
     $UserName=$Credential.UserName
@@ -76,7 +77,7 @@ try {
     $info.UseShellExecute = $false
     # The child inherits this console for hidden password entry; stdin is not captured.
     if ($Credential) {
-        if (-not ('CampusBackgroundProcess' -as [type])) { Add-Type -Path "$PSScriptRoot\scripts\DesktopBridge.cs" }
+        if (-not ('CampusBackgroundProcess' -as [type])) { Add-Type -Path "$ProjectRoot\scripts\DesktopBridge.cs" }
         $backgroundProcess=[CampusBackgroundProcess]::new($binary,$info.Arguments,$Credential.GetNetworkCredential().Password)
         $process=$backgroundProcess.Process
     } else { $process = [Diagnostics.Process]::Start($info) }
@@ -98,13 +99,13 @@ try {
             $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($state.error) { throw "Campus route setup failed: $($state.error)" }
             if ($state.connected -and $state.connectedAt -ne $lastReady) {
-                & "$PSScriptRoot\Update-CampusRoutes.ps1" -ConfigPath $ConfigPath -DesktopContext $DesktopContext
+                & "$ProjectRoot\app\Update-CampusRoutes.ps1" -ConfigPath $ConfigPath -DesktopContext $DesktopContext
                 $state=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
                 $state | Add-Member -NotePropertyName connectionMode -NotePropertyValue $config.connectionMode -Force
                 Save-CampusState $state $statePath
                 if ($NoClash) { Set-DirectHostMappings $state.domains (Join-Path $runtime 'direct-dns.json') }
                 if (-not $NoClash) {
-                    & "$PSScriptRoot\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath
+                    & "$ProjectRoot\app\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath
                     $clashApplied = $true
                 }
                 $lastReady = $state.connectedAt
@@ -124,17 +125,17 @@ try {
 } finally {
     if ($process -and -not $process.HasExited) {
         try { $process.Kill(); $process.WaitForExit(5000) | Out-Null }
-        catch { Write-Warning 'Could not stop owned OpenConnect process; run Recover.ps1.' }
+        catch { Write-Warning 'Could not stop owned OpenConnect process; run app\Recover.ps1.' }
     }
     try { Remove-CampusState "$runtime\state.json" }
-    catch { Write-Warning 'Route cleanup needs attention; run Recover.ps1.' }
+    catch { Write-Warning 'Route cleanup needs attention; run app\Recover.ps1.' }
     if ($NoClash) {
         try { Restore-DirectHostMappings (Join-Path $runtime 'direct-dns.json') }
         catch { Write-Warning '校园域名映射恢复失败，请使用 GUI 异常恢复。' }
     }
     if ($clashApplied) {
-        try { & "$PSScriptRoot\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath -Restore }
-        catch { Write-Warning 'Clash restore needs attention. Run Apply-Clash.ps1 -Restore or Recover.ps1.' }
+        try { & "$ProjectRoot\app\Apply-Clash.ps1" -ConfigPath $ConfigPath -ClashDirectory $ClashDirectory -MihomoPath $MihomoPath -Restore }
+        catch { Write-Warning 'Clash restore needs attention. Run app\Apply-Clash.ps1 -Restore or Recover.ps1.' }
     }
     $lockHandle.Dispose()
     if ($backgroundProcess) { $backgroundProcess.Dispose() }

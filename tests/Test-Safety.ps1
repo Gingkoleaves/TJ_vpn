@@ -1,4 +1,4 @@
-. "$PSScriptRoot\..\scripts\Common.ps1"
+﻿. "$PSScriptRoot\..\scripts\Common.ps1"
 $passed = 0
 $firstName = New-CampusInterfaceName 'TongjiVPN'
 $secondName = New-CampusInterfaceName 'TongjiVPN'
@@ -22,7 +22,7 @@ foreach ($route in @('0.0.0.0/0','128.0.0.0/1','192.0.2.10/24','127.0.0.1/32','1
     Assert-Rejected { Assert-CampusPrefix $route }
 }
 foreach ($route in @('192.0.2.10/32','192.0.0.0/16','202.120.190.208/32')) { Assert-CampusPrefix $route; $passed++ }
-$config = Read-CampusConfig "$PSScriptRoot\..\config.example.json"
+$config = Read-CampusConfig "$PSScriptRoot\..\config\config.example.json"
 if ($config.server -ne 'https://vpn.tongji.cn') { throw 'Example configuration failed.' }
 $passed++
 if ((ConvertTo-NativeArgument 'a b') -ne '"a b"') { throw 'Space argument not preserved.' }

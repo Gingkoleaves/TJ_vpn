@@ -9,4 +9,4 @@ jobs:
         with:
           components: rustfmt, clippy
       - shell: powershell
-        run: .\Test.ps1
+        run: .\tools\Test.ps1

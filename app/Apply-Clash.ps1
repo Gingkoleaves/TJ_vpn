@@ -1,16 +1,17 @@
-param(
-    [string]$ConfigPath = "$PSScriptRoot\config.local.json",
+﻿param(
+    [string]$ConfigPath = "$PSScriptRoot\..\config.local.json",
     [string]$ClashDirectory = "$env:APPDATA\io.github.clash-verge-rev.clash-verge-rev",
     [string]$MihomoPath,
     [switch]$Restore
 )
-. "$PSScriptRoot\scripts\Clash.ps1"
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Clash.ps1"
 $config = Read-CampusConfig $ConfigPath
-$runtime = "$PSScriptRoot\runtime"
+$runtime = "$ProjectRoot\runtime"
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 $changePath = Join-Path $runtime 'clash-change.json'
-$helper = "$PSScriptRoot\bin\campus-config.exe"
-if (-not (Test-Path -LiteralPath $helper)) { $helper = "$PSScriptRoot\target\release\campus-config.exe" }
+$helper = "$ProjectRoot\bin\campus-config.exe"
+if (-not (Test-Path -LiteralPath $helper)) { $helper = "$ProjectRoot\target\release\campus-config.exe" }
 
 if ($Restore) {
     if (-not (Test-Path -LiteralPath $changePath)) { Write-Host 'No Clash change to restore.'; return }
@@ -42,7 +43,7 @@ if ($Restore) {
 
 Assert-ClashHealth $config.clashPipe $config.clashProxyPort
 $directory = (Resolve-Path -LiteralPath $ClashDirectory).Path
-if (-not (Test-Path -LiteralPath $helper)) { throw 'Run Build.ps1 or use the packaged release (Rust helper is missing).' }
+if (-not (Test-Path -LiteralPath $helper)) { throw 'Run tools\Build.ps1 or use the packaged release (Rust helper is missing).' }
 $statePath = Join-Path $runtime 'state.json'
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
 if (-not $state.connected) { throw 'Native campus connection must be ready before changing Clash.' }
@@ -97,6 +98,6 @@ try {
         Copy-Item -LiteralPath $baseScript -Destination $scriptPath
         $newChange.active = $false
         Save-CampusState $newChange $changePath
-    } catch { Write-Warning 'Automatic restore failed. Run Apply-Clash.ps1 -Restore.' }
+    } catch { Write-Warning 'Automatic restore failed. Run app\Apply-Clash.ps1 -Restore.' }
     throw
 }

@@ -1,11 +1,12 @@
-param([string]$SevenZipPath)
+﻿param([string]$SevenZipPath)
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
 $ErrorActionPreference = 'Stop'
 $version = '9.21'
 $expectedHash = '6ee9e8eb9bc59ef70bb0717df7f99703f8a2ccd11d8e45d58a61f9a2e6ef7d00'
 $url = 'https://gitlab.com/openconnect/openconnect/-/jobs/artifacts/v9.21/raw/openconnect-installer-MinGW64-GnuTLS.exe?job=MinGW64%2FGnuTLS'
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Only Windows x64 is currently supported.' }
-$downloads = "$PSScriptRoot\downloads"
-$vendor = "$PSScriptRoot\vendor\openconnect"
+$downloads = "$ProjectRoot\downloads"
+$vendor = "$ProjectRoot\vendor\openconnect"
 New-Item -ItemType Directory -Path $downloads,$vendor -Force | Out-Null
 $installer = Join-Path $downloads "openconnect-$version.exe"
 if (-not (Test-Path -LiteralPath $installer)) {
@@ -36,6 +37,6 @@ if ($versionExit -ne 0) { throw 'OpenConnect version check failed.' }
 if ($protocols -notmatch 'Supported protocols:.*array') { throw 'Array support is missing.' }
 if (-not (Test-Path -LiteralPath "$vendor\wintun.dll")) { throw 'Wintun is missing.' }
 Write-Host "OpenConnect $version + Array + Wintun ready (portable)."
-if (-not (Test-Path -LiteralPath "$PSScriptRoot\config.local.json")) {
-    Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination "$PSScriptRoot\config.local.json"
+if (-not (Test-Path -LiteralPath "$ProjectRoot\config.local.json")) {
+    Copy-Item -LiteralPath "$ProjectRoot\config\config.example.json" -Destination "$ProjectRoot\config.local.json"
 }

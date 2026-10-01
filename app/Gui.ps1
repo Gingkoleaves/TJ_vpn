@@ -1,12 +1,13 @@
 ﻿param([switch]$SmokeTest, [string]$PreviewPath)
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
 $ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\scripts\Common.ps1"
-. "$PSScriptRoot\scripts\DesktopConfig.ps1"
-. "$PSScriptRoot\scripts\ConnectionMode.ps1"
-. "$PSScriptRoot\scripts\ProxySettings.ps1"
+. "$ProjectRoot\scripts\Common.ps1"
+. "$ProjectRoot\scripts\DesktopConfig.ps1"
+. "$ProjectRoot\scripts\ConnectionMode.ps1"
+. "$ProjectRoot\scripts\ProxySettings.ps1"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-Add-Type -Path "$PSScriptRoot\scripts\DesktopBridge.cs"
+Add-Type -Path "$ProjectRoot\scripts\DesktopBridge.cs"
 [Windows.Forms.Application]::EnableVisualStyles()
 Add-Type @'
 using System;
@@ -38,7 +39,7 @@ $script:authSession = $null
 $script:backgroundSession = ''
 $script:backgroundStamp = ''
 $script:lastStatus = ''
-$runtime = Join-Path $PSScriptRoot 'runtime'
+$runtime = Join-Path $ProjectRoot 'runtime'
 $form = [Windows.Forms.Form]::new()
 $form.Text = '同济校园 VPN · 0.3.0 预发布'
 $form.Size = [Drawing.Size]::new(800,730)
@@ -84,7 +85,7 @@ function Add-Log([string]$Text) {
 function Start-PanelTask([string]$File,[string]$Label) {
     if ($script:task) { Add-Log '上一项操作尚未结束，请稍候。'; return }
     if ($File -eq 'Recover.ps1') {
-        $worker=Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+$PSScriptRoot+'\Recover.ps1" -GuiResultPath "'+$runtime+'\recovery-result.json"')
+        $worker=Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+$ProjectRoot+'\app\Recover.ps1" -GuiResultPath "'+$runtime+'\recovery-result.json"')
         $script:task=[pscustomobject]@{process=$worker;stdout='';stderr='';label=$Label}
         Add-Log '已启动管理员恢复后台；结果将显示在窗口内。'
         return
@@ -93,7 +94,7 @@ function Start-PanelTask([string]$File,[string]$Label) {
     $id=[Guid]::NewGuid().ToString('N')
     $stdout=Join-Path $runtime "gui-$id.out.log"
     $stderr=Join-Path $runtime "gui-$id.err.log"
-    $argsText='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $PSScriptRoot $File)+'"'
+    $argsText='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path (Join-Path $ProjectRoot 'app') $File)+'"'
     $process=Start-Process powershell.exe -ArgumentList $argsText -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $script:task=[pscustomobject]@{process=$process; stdout=$stdout; stderr=$stderr; label=$Label}
     Add-Log "$Label 已开始；完成后在此显示结果。"
@@ -114,7 +115,7 @@ $connect=Add-Button '连接' 26 332 170 {
         $pipeName='tongji-auth-'+[Guid]::NewGuid().ToString('N')
         $server=[CampusCredentialServer]::new($pipeName)
         try {
-            $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSScriptRoot+'\Background.ps1" -PipeName '+$pipeName+' -GuiProcessId '+$PID
+            $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$ProjectRoot+'\app\Background.ps1" -PipeName '+$pipeName+' -GuiProcessId '+$PID
             $script:connectionWindow=Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList $arguments -PassThru
             $script:authSession=[pscustomobject]@{server=$server;worker=$script:connectionWindow;deadline=(Get-Date).AddSeconds(60)}
             $script:backgroundSession=$pipeName; $script:backgroundStamp=''
@@ -136,7 +137,7 @@ $disconnect=Add-Button '断开' 212 332 170 {
 }
 $edit=Add-Button '配置' 398 332 170 {
     Invoke-Safely {
-        $path=Join-Path $PSScriptRoot 'config.local.json'
+        $path=Join-Path $ProjectRoot 'config.local.json'
         if ((Show-CampusHostEditor $form $path) -eq 'OK') { Add-Log '校园 IP / 域名已保存，下次连接生效。' }
     }
 }
@@ -150,7 +151,7 @@ $footer.Anchor='Bottom,Left,Right'
 $form.Size=[Drawing.Size]::new(800,790); $form.MinimumSize=$form.Size
 foreach ($control in @($form.Controls)) { if ($control.Top -ge 332 -and $control -ne $footer) { $control.Top+=60 } }
 $script:logBox.Height=240
-$script:settingsPath=Join-Path $PSScriptRoot 'connection.local.json'
+$script:settingsPath=Join-Path $ProjectRoot 'connection.local.json'
 $script:settings=Read-ConnectionSettings $script:settingsPath
 $modeLabel=Add-Label '连接方式' 26 302 90 28
 $script:modeBox=[Windows.Forms.ComboBox]::new(); $script:modeBox.DropDownStyle='DropDownList'; $script:modeBox.SetBounds(112,299,240,30)
@@ -183,7 +184,7 @@ function Update-Panel {
         if (Test-Path -LiteralPath $pidPath) {
             $owner=Get-Content -LiteralPath $pidPath -Raw -Encoding UTF8 | ConvertFrom-Json
             $process=Get-Process -Id $owner.id -ErrorAction SilentlyContinue
-            $expectedBinary=Join-Path $PSScriptRoot 'vendor\openconnect\openconnect.exe'
+            $expectedBinary=Join-Path $ProjectRoot 'vendor\openconnect\openconnect.exe'
             $script:liveProcess=[bool]($process -and $process.ProcessName -eq 'openconnect' -and $owner.path -eq $expectedBinary -and
                 (-not $process.Path -or $process.Path -eq $owner.path) -and $process.StartTime.ToUniversalTime().ToString('o') -eq $owner.startedAt)
         }
@@ -262,14 +263,14 @@ try {
         $buttonTexts=@($form.Controls | Where-Object { $_ -is [Windows.Forms.Button] } | ForEach-Object Text)
         if (($buttonTexts -join ',') -ne '连接,断开,配置,日志,重新检测,代理设置,连接测试,异常恢复') { throw 'Panel controls missing.' }
         if (-not $script:passwordBox.UseSystemPasswordChar) { throw 'Password field is not masked.' }
-        $configFixture=Join-Path $PSScriptRoot 'runtime\tests\gui-config.json'
+        $configFixture=Join-Path $ProjectRoot 'runtime\tests\gui-config.json'
         New-Item -ItemType Directory -Path (Split-Path $configFixture -Parent) -Force | Out-Null
-        Copy-Item -LiteralPath "$PSScriptRoot\config.example.json" -Destination $configFixture
+        Copy-Item -LiteralPath "$ProjectRoot\config\config.example.json" -Destination $configFixture
         $editorResult=Show-CampusHostEditor $form $configFixture -SmokeTest
         $edited=Read-CampusConfig $configFixture
         if ($editorResult -ne 'OK' -or $edited.routes.Count -ne 2 -or $edited.routes[1] -ne '192.0.2.11/32' -or $edited.hosts[0] -ne 'node.campus.example') { throw 'Mixed target configuration dialog save failed.' }
-        $proxyFixture=Join-Path $PSScriptRoot 'runtime\tests\gui-proxy.json'
-        $fixtureSettings=Read-ConnectionSettings (Join-Path $PSScriptRoot 'runtime\tests\no-settings.json')
+        $proxyFixture=Join-Path $ProjectRoot 'runtime\tests\gui-proxy.json'
+        $fixtureSettings=Read-ConnectionSettings (Join-Path $ProjectRoot 'runtime\tests\no-settings.json')
         if ((Show-ProxySettings $form $fixtureSettings $proxyFixture -SmokeTest) -ne 'OK') { throw 'Proxy dialog failed.' }
         $savedSettings=Read-ConnectionSettings $proxyFixture
         if ($savedSettings.mode -ne 'auto' -or $savedSettings.clashProxyPort -ne 7897 -or $savedSettings.mihomoPath -ne '') { throw 'Proxy settings did not round-trip.' }

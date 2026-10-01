@@ -6,11 +6,12 @@ fn script_path(executable: &Path) -> Result<std::path::PathBuf, String> {
     let directory = executable
         .parent()
         .ok_or("Cannot locate package directory")?;
-    let script = directory.join("Gui.ps1");
-    if !script.is_file() {
-        return Err("Gui.ps1 is missing. Extract the complete release ZIP before starting.".into());
+    for script in [directory.join("app/Gui.ps1"), directory.join("Gui.ps1")] {
+        if script.is_file() {
+            return Ok(script);
+        }
     }
-    Ok(script)
+    Err("GUI script is missing. Extract the complete release ZIP before starting.".into())
 }
 
 fn launch() -> Result<(), String> {
@@ -94,6 +95,14 @@ mod tests {
             script_path(&root.join("TongjiVPN.exe")).unwrap(),
             root.join("Gui.ps1")
         );
+        std::fs::create_dir(root.join("app")).unwrap();
+        std::fs::write(root.join("app/Gui.ps1"), "# current layout").unwrap();
+        assert_eq!(
+            script_path(&root.join("TongjiVPN.exe")).unwrap(),
+            root.join("app/Gui.ps1")
+        );
+        std::fs::remove_file(root.join("app/Gui.ps1")).unwrap();
+        std::fs::remove_dir(root.join("app")).unwrap();
         std::fs::remove_file(root.join("Gui.ps1")).unwrap();
         std::fs::remove_dir(root).unwrap();
     }

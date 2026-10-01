@@ -13,11 +13,14 @@ jobs:
           components: rustfmt, clippy
       - shell: powershell
         run: |
-          .\Test.ps1
-          .\Build.ps1
-          $launcher = Start-Process .\TongjiVPN.exe -ArgumentList '--smoke-test' -PassThru -Wait
+          .\tools\Test.ps1
+          .\tools\Build.ps1
+          $launcher = Start-Process .\TongjiVPN.exe -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru -Wait
           if ($launcher.ExitCode -ne 0) { throw 'Compiled launcher failed.' }
-          .\Package.ps1
+          .\tools\Package.ps1
+          Get-ChildItem .\dist -Filter '*.zip' | ForEach-Object {
+            .\tools\Test-Package.ps1 -PackagePath $_.FullName
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: tongji-openconnect-windows-x64-preview

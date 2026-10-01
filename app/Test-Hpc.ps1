@@ -1,5 +1,6 @@
-. "$PSScriptRoot\scripts\Common.ps1"
-$statePath=Join-Path $PSScriptRoot 'runtime\state.json'
+﻿$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Common.ps1"
+$statePath=Join-Path $ProjectRoot 'runtime\state.json'
 $state=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
 if (-not $state.connected) { throw 'Connect campus VPN before testing HPC nodes.' }
 $adapter=Get-NetAdapter -InterfaceIndex $state.interfaceIndex -ErrorAction SilentlyContinue
@@ -27,5 +28,5 @@ foreach ($domain in @($state.domains)) {
     }
 }
 if (-not $results.Count) { throw 'Configure a campus domain and reconnect first.' }
-$results | Export-Csv -LiteralPath "$PSScriptRoot\runtime\hpc-checks.csv" -NoTypeInformation -Encoding UTF8
+$results | Export-Csv -LiteralPath "$ProjectRoot\runtime\hpc-checks.csv" -NoTypeInformation -Encoding UTF8
 if (-not @($results | Where-Object sshGreeting).Count) { exit 1 }

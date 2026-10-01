@@ -1,12 +1,13 @@
-param([int]$Count = 1, [int]$IntervalSeconds = 10, [string]$ConfigPath = "$PSScriptRoot\config.local.json")
-. "$PSScriptRoot\scripts\Common.ps1"
+﻿param([int]$Count = 1, [int]$IntervalSeconds = 10, [string]$ConfigPath = "$PSScriptRoot\..\config.local.json")
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Common.ps1"
 if ($Count -lt 1 -or $Count -gt 10000 -or $IntervalSeconds -lt 0) { throw 'Invalid sampling options.' }
 $config = Read-CampusConfig $ConfigPath
-$sessionPath=Join-Path $PSScriptRoot 'runtime\session-config.json'
+$sessionPath=Join-Path $ProjectRoot 'runtime\session-config.json'
 if (Test-Path -LiteralPath $sessionPath) { $config=Read-CampusConfig $sessionPath }
 $direct=$config.PSObject.Properties['connectionMode'] -and $config.connectionMode -eq 'direct'
-New-Item -ItemType Directory -Path "$PSScriptRoot\runtime" -Force | Out-Null
-$statePath = "$PSScriptRoot\runtime\state.json"
+New-Item -ItemType Directory -Path "$ProjectRoot\runtime" -Force | Out-Null
+$statePath = "$ProjectRoot\runtime\state.json"
 $results = @()
 for ($sample = 1; $sample -le $Count; $sample++) {
     $campusReady = $false
@@ -16,7 +17,7 @@ for ($sample = 1; $sample -le $Count; $sample++) {
         $campusReady = $state.connected -and (Test-CampusAdapter $adapter $state.interfaceName) -and $adapter.Status -eq 'Up'
     }
     foreach ($test in @(@{name='campus';url='https://software.tongji.edu.cn'}, @{name='external';url='https://www.google.com'})) {
-        $errorFile = "$PSScriptRoot\runtime\curl-error.txt"
+        $errorFile = "$ProjectRoot\runtime\curl-error.txt"
         $savedPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
@@ -32,5 +33,5 @@ for ($sample = 1; $sample -le $Count; $sample++) {
     }
     if ($sample -lt $Count) { Start-Sleep -Seconds $IntervalSeconds }
 }
-$results | Export-Csv -LiteralPath "$PSScriptRoot\runtime\checks.csv" -NoTypeInformation -Encoding UTF8
+$results | Export-Csv -LiteralPath "$ProjectRoot\runtime\checks.csv" -NoTypeInformation -Encoding UTF8
 if (@($results | Where-Object { $_.curlExit -ne 0 -or $_.httpCode -ne '200' -or ($_.target -eq 'campus' -and -not $_.campusReady) }).Count) { exit 1 }

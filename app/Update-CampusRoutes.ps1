@@ -1,11 +1,12 @@
-param([string]$ConfigPath = "$PSScriptRoot\config.local.json", $DesktopContext)
-. "$PSScriptRoot\scripts\Common.ps1"
-. "$PSScriptRoot\scripts\TargetResolution.ps1"
-. "$PSScriptRoot\scripts\DesktopStatus.ps1"
+﻿param([string]$ConfigPath = "$PSScriptRoot\..\config.local.json", $DesktopContext)
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Common.ps1"
+. "$ProjectRoot\scripts\TargetResolution.ps1"
+. "$ProjectRoot\scripts\DesktopStatus.ps1"
 Assert-Administrator
-if (-not ('CampusDns' -as [type])) { Add-Type -Path "$PSScriptRoot\scripts\CampusDns.cs" }
+if (-not ('CampusDns' -as [type])) { Add-Type -Path "$ProjectRoot\scripts\CampusDns.cs" }
 $config = Read-CampusConfig $ConfigPath
-$statePath = "$PSScriptRoot\runtime\state.json"
+$statePath = "$ProjectRoot\runtime\state.json"
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
 if (-not $state.connected) { throw 'Connect native OpenConnect first.' }
 $adapter = Get-NetAdapter -InterfaceIndex $state.interfaceIndex

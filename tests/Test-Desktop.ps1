@@ -1,4 +1,4 @@
-. "$PSScriptRoot\..\scripts\Common.ps1"
+﻿. "$PSScriptRoot\..\scripts\Common.ps1"
 . "$PSScriptRoot\..\scripts\DesktopConfig.ps1"
 if (-not ('CampusCredentialServer' -as [type])) { Add-Type -Path "$PSScriptRoot\..\scripts\DesktopBridge.cs" }
 $passed=0
@@ -11,7 +11,7 @@ foreach ($bad in @('https://node.campus.example','bad..tongji.cn','*.tongji.cn',
 }
 $fixtureRoot=Join-Path $PSScriptRoot '..\runtime\tests'
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
-$fixtureConfig=Get-Content -LiteralPath "$PSScriptRoot\..\config.example.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$fixtureConfig=Get-Content -LiteralPath "$PSScriptRoot\..\config\config.example.json" -Raw -Encoding UTF8 | ConvertFrom-Json
 $fixtureConfig.targets=@('192.0.2.10','node.campus.example')
 $fixturePath=Join-Path $fixtureRoot 'mixed-targets.json'
 Save-CampusState $fixtureConfig $fixturePath

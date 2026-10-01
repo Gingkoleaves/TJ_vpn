@@ -94,7 +94,7 @@ GUI 接受 IPv4 主机地址或完整域名，会去重并规范域名大小写�
 
 “连接测试”访问校园软件站和 Google：联动模式使用本地代理端口，直连模式直接访问。Google 在当前网络无法直连时，外网项可能失败，需结合校园目标的实际访问结果判断，不能仅据此认定 VPN 失败。测试站点也不能代替对自己配置主机的验证。
 
-在解压目录中也可以使用 PowerShell 检查状态或采样：
+在已发布 preview.8 包的解压目录中也可以使用以下 PowerShell 命令检查状态或采样（当前源码和新布局包需在脚本名前加 `app\`）：
 
 ```powershell
 .\Status.ps1
@@ -121,7 +121,7 @@ ssh -p 10022 <超算账号>@<校园域名>
 | 网卡已连接但主机不可达 | 检查目标是否已配置、地址是否正确，以及服务端口和主机自身状态 |
 | 断开后清理失败 | 点击“异常恢复”；不要手动删除其他 VPN 的网卡或路由 |
 
-命令行恢复需在管理员 PowerShell 中执行：
+preview.8 包的命令行恢复需在管理员 PowerShell 中执行；当前源码使用 `app\Recover.ps1`：
 
 ```powershell
 .\Recover.ps1
@@ -131,45 +131,21 @@ ssh -p 10022 <超算账号>@<校园域名>
 
 ## 源码运行与开发
 
-以下步骤面向开发者；从 Releases 下载便携包的用户无需执行。
+源码按用途组织为 `app/`（应用入口）、`scripts/`（共享组件）、`src/`（Rust）、`config/`（模板与发布清单）、`tools/`（开发工具）、`tests/` 和 `docs/`。本地配置与运行状态继续保存在项目根目录和 `runtime/`，不纳入版本控制。
+
+- [开发、测试、构建与发布流程](docs/DEVELOPMENT.md)
+- [目录约定与发布包布局](docs/REPOSITORY_LAYOUT.md)
 
 ```powershell
 git clone https://github.com/Gingkoleaves/TJ_vpn.git
 cd TJ_vpn
-.\Test.ps1
-.\Build.ps1
-.\Setup.ps1
+.\tools\Test.ps1
+.\tools\Build.ps1
+.\app\Setup.ps1
 .\TongjiVPN.exe
 ```
 
-构建需要 Rust stable 和 Windows C++ 链接工具；测试还使用 Windows PowerShell / WinForms。`Setup.ps1` 下载固定版本 OpenConnect，校验 SHA256 后通过 7-Zip 解包。Wintun 在创建接口时加载，网络配置需要管理员权限。
-
-命令行连接需在管理员 PowerShell 中运行：
-
-```powershell
-# Clash Verge 联动
-.\Connect.ps1
-
-# 没有运行中代理时直连
-.\Connect.ps1 -NoClash
-
-# 自定义 Clash Verge 路径
-.\Connect.ps1 -ClashDirectory 'C:\your\clash-config' -MihomoPath 'C:\your\verge-mihomo.exe'
-```
-
-`Start.cmd` 是代理联动的命令行备用入口。认证时 `authgroup` 留空，账号密码仅在本机输入；命令行连接窗口需要保持运行，Ctrl+C 请求断开。GUI 会自动处理认证组，并使用隐藏的管理员后台。
-
-### 打包与发布
-
-```powershell
-.\Package.ps1 -Version 0.3.0-preview.8
-```
-
-在已完成构建的干净工作目录运行，输出 ZIP 和 `.zip.sha256` 至本地 `dist/`。同版本输出目录已存在时，脚本会拒绝覆盖；应先备份原输出，或使用新版本号。
-
-GitHub Actions 会在 Windows 上执行自动化测试；[打包工作流](.github/workflows/package.yml) 需手动触发，生成 Actions Artifact，不自动创建 tag 或 GitHub Release。面向用户的下载文件应作为 Release 附件上传，而不是提交 `dist/`。
-
-PowerShell / WinForms 负责 GUI、连接生命周期和 Windows 网络配置，Rust 负责 exe 启动器及 Clash YAML / 增强脚本生成。发布包使用文件白名单，并附 [第三方组件说明](THIRD-PARTY.md)。
+已发布 preview.8 便携包保留原有布局；当前源码的 PowerShell 入口已移至 `app/`。GUI 双击方式不变。`dist/` 是本地打包输出，不提交到仓库；下载文件仍通过 Release 附件提供。
 
 ## 凭据与恢复设计
 

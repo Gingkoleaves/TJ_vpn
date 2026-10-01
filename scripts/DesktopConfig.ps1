@@ -13,7 +13,7 @@
 
 function Show-CampusHostEditor($Owner, [string]$ConfigPath, [switch]$SmokeTest) {
     if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        Copy-Item -LiteralPath "$PSScriptRoot\..\config.example.json" -Destination $ConfigPath
+        Copy-Item -LiteralPath "$PSScriptRoot\..\config\config.example.json" -Destination $ConfigPath
     }
     $config=Read-CampusConfig $ConfigPath
     $dialog=[Windows.Forms.Form]::new()

@@ -1,5 +1,6 @@
-. "$PSScriptRoot\scripts\Common.ps1"
-$statePath = "$PSScriptRoot\runtime\state.json"
+﻿$ProjectRoot = Split-Path $PSScriptRoot -Parent
+. "$ProjectRoot\scripts\Common.ps1"
+$statePath = "$ProjectRoot\runtime\state.json"
 if (-not (Test-Path -LiteralPath $statePath)) { Write-Host 'No native campus connection has been configured yet.'; exit 0 }
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
 $state | Select-Object connected,interfaceName,address,dns,connectedAt,error | Format-List
