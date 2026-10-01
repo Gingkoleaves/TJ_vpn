@@ -1,5 +1,12 @@
 . "$PSScriptRoot\..\scripts\Common.ps1"
 $passed = 0
+foreach ($description in @('OpenConnect Tunnel', 'Wintun Userspace Tunnel')) {
+    if (-not (Test-CampusAdapter ([pscustomobject]@{Name='TongjiVPN';InterfaceDescription=$description}) 'TongjiVPN')) { throw 'Expected campus driver refused.' }
+    $passed++
+}
+if (Test-CampusAdapter ([pscustomobject]@{Name='OtherVPN';InterfaceDescription='OpenConnect Tunnel'}) 'TongjiVPN') { throw 'Wrong interface accepted.' }
+if (Test-CampusAdapter ([pscustomobject]@{Name='TongjiVPN';InterfaceDescription='Intel Ethernet'}) 'TongjiVPN') { throw 'Physical interface accepted.' }
+$passed += 2
 function Assert-Rejected([scriptblock]$Action) {
     $rejected = $false
     try { & $Action } catch { $rejected = $true }

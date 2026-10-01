@@ -17,7 +17,7 @@ try {
     Assert-Administrator
     $interfaceIndex = [int]$env:TUNIDX
     $adapter = Get-NetAdapter -InterfaceIndex $interfaceIndex
-    if ($adapter.Name -ne $config.interfaceName -or $adapter.InterfaceDescription -notlike '*Wintun*') {
+    if (-not (Test-CampusAdapter $adapter $config.interfaceName)) {
         throw 'Refusing to configure an unexpected network adapter.'
     }
     $address = [Net.IPAddress]::Parse($env:INTERNAL_IP4_ADDRESS)
@@ -62,6 +62,7 @@ try {
     exit 0
 } catch {
     $message = $_.Exception.Message
+    [IO.File]::WriteAllText((Join-Path $runtime 'hook-error.txt'), $message, [Text.UTF8Encoding]::new($false))
     Write-Error $message -ErrorAction Continue
     if (Test-Path -LiteralPath $statePath) {
         Remove-CampusState $statePath

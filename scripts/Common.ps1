@@ -42,6 +42,11 @@ function Assert-Administrator {
     }
 }
 
+function Test-CampusAdapter($Adapter, [string]$ExpectedName) {
+    return ($Adapter -and $Adapter.Name -eq $ExpectedName -and
+        ($Adapter.InterfaceDescription -eq 'OpenConnect Tunnel' -or $Adapter.InterfaceDescription -like '*Wintun*'))
+}
+
 function Save-CampusState($State, [string]$Path) {
     $temporary = "$Path.$PID.tmp"
     [IO.File]::WriteAllText($temporary, ($State | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
@@ -73,7 +78,7 @@ function Remove-CampusState([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
     $state = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
     $adapter = Get-NetAdapter -InterfaceIndex $state.interfaceIndex -ErrorAction SilentlyContinue
-    if ($adapter -and $adapter.Name -eq $state.interfaceName -and $adapter.InterfaceDescription -like '*Wintun*') {
+    if (Test-CampusAdapter $adapter $state.interfaceName) {
         foreach ($route in @($state.addedRoutes)) {
             Get-NetRoute -InterfaceIndex $state.interfaceIndex -DestinationPrefix $route -PolicyStore ActiveStore -ErrorAction SilentlyContinue |
                 Where-Object { $_.NextHop -eq '0.0.0.0' -and $_.RouteMetric -eq 3 } |

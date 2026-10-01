@@ -39,6 +39,7 @@ $process = $null
 $clashApplied = $false
 $pidPath = Join-Path $runtime 'process.json'
 try {
+    Remove-Item -LiteralPath "$runtime\hook-error.txt" -ErrorAction SilentlyContinue
     Remove-CampusState "$runtime\state.json"
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $binary
@@ -50,6 +51,9 @@ try {
     Save-CampusState ([pscustomobject]@{id=$process.Id; path=$binary; startedAt=$process.StartTime.ToUniversalTime().ToString('o')}) $pidPath
     $lastReady = ''
     while (-not $process.HasExited) {
+        if (Test-Path -LiteralPath "$runtime\hook-error.txt") {
+            throw ('Campus hook failed: ' + (Get-Content -LiteralPath "$runtime\hook-error.txt" -Raw -Encoding UTF8))
+        }
         $statePath = Join-Path $runtime 'state.json'
         if (Test-Path -LiteralPath $statePath) {
             $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
